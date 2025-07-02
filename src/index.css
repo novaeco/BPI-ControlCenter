@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background-dark text-gray-100 min-h-screen w-full overflow-x-hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+  * {
+    @apply antialiased;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 
+           disabled:opacity-50 disabled:cursor-not-allowed
+           touch-none select-none;
+  }
+  .btn-primary {
+    @apply btn bg-primary-500 text-white hover:bg-primary-400 active:bg-primary-600
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/50;
+  }
+  .btn-secondary {
+    @apply btn bg-gray-700 text-white hover:bg-gray-600 active:bg-gray-800
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-500/50;
+  }
+  .input {
+    @apply w-full bg-surface-dark border border-gray-700 rounded-lg px-4 py-2 
+           focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500
+           disabled:opacity-50 disabled:cursor-not-allowed
+           transition-colors duration-200
+           text-base sm:text-sm;
+  }
+  .card {
+    @apply bg-surface-dark rounded-xl border border-gray-700/50 shadow-soft-lg overflow-hidden
+           backdrop-blur-sm;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+           whitespace-nowrap;
+  }
+  .toggle {
+    @apply relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/50
+           touch-none select-none;
+  }
+  .container-fluid {
+    @apply w-full max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+}
