@@ -467,62 +467,6 @@ function App() {
 
           <div className={getGridClasses()}>
             {filteredTerrariums.map((terrarium, index) => (
-              <TerrariumCard
-                key={terrarium.id}
-                terrarium={terrarium}
-                viewMode={viewMode}
-                index={index}
-                onSettingsClick={handleSettingsClick}
-                onToggle={toggleTerrarium}
-                onInfoClick={handleInfoClick}
-                selectedTerrarium={selectedTerrarium}
-                infoPopupOpen={infoPopupOpen}
-                onReorder={handleReorderTerrariums}
-              />
-            ))}
-          </div>
-        </div>
-
-    <DragDropProvider>
-      <div className="min-h-screen bg-[#0a1119]" onClick={handleClickOutside}>
-        <div className="container-fluid py-3 sm:py-4 lg:py-6">
-          <MobileOptimizedHeader
-            currentTime={currentTime}
-            avatarUrl={avatarUrl}
-            accountMenuOpen={accountMenuOpen}
-            onAccountToggle={(e) => {
-              e.stopPropagation();
-              setAccountMenuOpen(!accountMenuOpen);
-            }}
-            onNetworkClick={() => {}}
-            wifiEnabled={wifiEnabled}
-            onWifiToggle={(e) => {
-              e.stopPropagation();
-              setWifiPopupOpen(!wifiPopupOpen);
-              setBluetoothPopupOpen(false);
-              setGeneralSettingsOpen(false);
-            }}
-            bluetoothEnabled={bluetoothEnabled}
-            onBluetoothToggle={(e) => {
-              e.stopPropagation();
-              setBluetoothPopupOpen(!bluetoothPopupOpen);
-              setWifiPopupOpen(false);
-              setGeneralSettingsOpen(false);
-            }}
-            onGeneralSettingsToggle={(e) => {
-              e.stopPropagation();
-              setGeneralSettingsOpen(!generalSettingsOpen);
-              setWifiPopupOpen(false);
-              setBluetoothPopupOpen(false);
-            }}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            showAll={showAll}
-            onShowAllChange={setShowAll}
-          />
-
-          <div className={getGridClasses()}>
-            {filteredTerrariums.map((terrarium, index) => (
               <div key={terrarium.id}>
                 <TerrariumCard
                   terrarium={terrarium}
@@ -567,8 +511,6 @@ function App() {
           onClose={() => setGeneralSettingsOpen(false)}
           onAvatarUpdate={handleAvatarUpdate}
         />
-  );
-}
 
         {selectedTerrarium && (
           <TerrariumSettingsPopup
@@ -583,4 +525,7 @@ function App() {
         )}
       </div>
     </DragDropProvider>
+  );
+}
+
 export default App;
