@@ -5,16 +5,22 @@ export default {
     extend: {
       screens: {
         'xs': '375px',
+        'xxs': '320px',
         'sm': '640px',
         'md': '768px',
         'lg': '1024px',
         'xl': '1280px',
         '2xl': '1536px',
-        '3xl': '1920px',
+        '3xl': '1728px',
+        '4xl': '1920px',
+        '5xl': '2560px',
         'tall': { 'raw': '(min-height: 800px)' },
         'short': { 'raw': '(max-height: 700px)' },
         'touch': { 'raw': '(pointer: coarse)' },
         'mouse': { 'raw': '(pointer: fine)' },
+        'tiny': { 'raw': '(max-width: 374px)' },
+        'mobile-l': { 'raw': '(max-width: 425px)' },
+        'tablet': { 'raw': '(min-width: 768px) and (max-width: 1023px)' },
       },
       colors: {
         primary: {

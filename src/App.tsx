@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Sun, Moon, Droplet, Thermometer, Settings2, Power, Wifi, Bluetooth, Settings, Zap, Leaf, FlaskRound as Flask, Gauge, Info, UserCircle2, Network } from 'lucide-react';
+import { UserCircle2 } from 'lucide-react';
 import { AquariumType } from './types';
 import WifiPopup from './components/WifiPopup';
 import BluetoothPopup from './components/BluetoothPopup';
 import TerrariumSettingsPopup from './components/TerrariumSettingsPopup';
 import GeneralSettingsPopup from './components/GeneralSettingsPopup';
 import AnimalInfoPopup from './components/AnimalInfoPopup';
+import { DragDropProvider } from './components/DragDropProvider';
+import MobileOptimizedHeader from './components/MobileOptimizedHeader';
+import TerrariumCard from './components/TerrariumCard';
+import { ViewMode } from './components/ViewToggle';
+import { loadFromLocalStorage, saveToLocalStorage } from './utils/localStorage';
 
 function App() {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -19,8 +24,15 @@ function App() {
   const [infoPopupOpen, setInfoPopupOpen] = useState<number | null>(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => 
+    loadFromLocalStorage<ViewMode>('viewMode', 'grid')
+  );
+  const [showAll, setShowAll] = useState(() => 
+    loadFromLocalStorage<boolean>('showAll', true)
+  );
 
-  const [terrariums, setTerrariums] = useState<AquariumType[]>([
+  const [terrariums, setTerrariums] = useState<AquariumType[]>(() => 
+    loadFromLocalStorage<AquariumType[]>('terrariumOrder', [
     {
       id: 1,
       name: 'Desert Terrarium',
@@ -333,7 +345,8 @@ function App() {
       uviLevel: 3,
       isActive: true
     }
-  ]);
+  ])
+  );
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -342,21 +355,19 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: false 
-    });
-  };
+  // Sauvegarder l'ordre des terrariums
+  useEffect(() => {
+    saveToLocalStorage('terrariumOrder', terrariums);
+  }, [terrariums]);
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', { 
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  };
+  // Sauvegarder les préférences de vue
+  useEffect(() => {
+    saveToLocalStorage('viewMode', viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    saveToLocalStorage('showAll', showAll);
+  }, [showAll]);
 
   const handleClickOutside = () => {
     setWifiPopupOpen(false);
@@ -398,210 +409,178 @@ function App() {
     setAvatarUrl(newAvatarUrl);
   };
 
+  const handleReorderTerrariums = (fromIndex: number, toIndex: number) => {
+    const newTerrariums = [...terrariums];
+    const [movedItem] = newTerrariums.splice(fromIndex, 1);
+    newTerrariums.splice(toIndex, 0, movedItem);
+    setTerrariums(newTerrariums);
+  };
+
+  const filteredTerrariums = showAll 
+    ? terrariums 
+    : terrariums.filter(terrarium => terrarium.isActive);
+
+  const getGridClasses = () => {
+    if (viewMode === 'list') {
+      return 'grid grid-cols-1 gap-3 sm:gap-4 lg:gap-6';
+    }
+    return 'grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6';
+  };
   return (
-    <div className="min-h-screen bg-[#0a1119]" onClick={handleClickOutside}>
-      <div className="container-fluid py-4">
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-6 sm:mb-8 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setAccountMenuOpen(!accountMenuOpen);
-                }}
-                className="w-8 h-8 rounded-full bg-cyan-400/20 hover:bg-cyan-400/30 transition-colors flex items-center justify-center overflow-hidden"
-              >
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <UserCircle2 className="w-6 h-6 text-cyan-400" />
-                )}
-              </button>
+    <DragDropProvider>
+      <div className="min-h-screen bg-[#0a1119]" onClick={handleClickOutside}>
+        <div className="container-fluid py-3 sm:py-4 lg:py-6">
+          <MobileOptimizedHeader
+            currentTime={currentTime}
+            avatarUrl={avatarUrl}
+            accountMenuOpen={accountMenuOpen}
+            onAccountToggle={(e) => {
+              e.stopPropagation();
+              setAccountMenuOpen(!accountMenuOpen);
+            }}
+            onNetworkClick={() => {}}
+            wifiEnabled={wifiEnabled}
+            onWifiToggle={(e) => {
+              e.stopPropagation();
+              setWifiPopupOpen(!wifiPopupOpen);
+              setBluetoothPopupOpen(false);
+              setGeneralSettingsOpen(false);
+            }}
+            bluetoothEnabled={bluetoothEnabled}
+            onBluetoothToggle={(e) => {
+              e.stopPropagation();
+              setBluetoothPopupOpen(!bluetoothPopupOpen);
+              setWifiPopupOpen(false);
+              setGeneralSettingsOpen(false);
+            }}
+            onGeneralSettingsToggle={(e) => {
+              e.stopPropagation();
+              setGeneralSettingsOpen(!generalSettingsOpen);
+              setWifiPopupOpen(false);
+              setBluetoothPopupOpen(false);
+            }}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            showAll={showAll}
+            onShowAllChange={setShowAll}
+          />
 
-              {accountMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-[#1c2936] rounded-lg shadow-xl border border-gray-700 py-1 z-50">
-                  <button className="w-full px-4 py-2 text-left text-white hover:bg-[#141e2a] transition-colors text-sm">
-                    Switch Account
-                  </button>
-                  <button className="w-full px-4 py-2 text-left text-white hover:bg-[#141e2a] transition-colors text-sm">
-                    Sign In
-                  </button>
-                  <div className="border-t border-gray-700 my-1"></div>
-                  <button className="w-full px-4 py-2 text-left text-red-400 hover:bg-[#141e2a] transition-colors text-sm">
-                    Sign Out
-                  </button>
-                </div>
-              )}
-            </div>
-            <h1 className="text-2xl xs:text-3xl md:text-4xl font-bold text-cyan-400 tracking-tight">Novaecosystem</h1>
-          </div>
-          <div className="flex items-center gap-3 xs:gap-4 flex-wrap justify-center">
-            <span className="text-cyan-400 text-sm md:text-base">{formatDate(currentTime)}</span>
-            <span className="text-cyan-400 text-sm md:text-base">{formatTime(currentTime)}</span>
-            <button
-              className="p-1 rounded-md hover:bg-[#1c2936]/60 transition-colors text-gray-600"
-            >
-              <Network className="w-4 h-4 md:w-5 md:h-5" />
-            </button>
-            <div className="relative">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setWifiPopupOpen(!wifiPopupOpen);
-                  setBluetoothPopupOpen(false);
-                  setGeneralSettingsOpen(false);
-                }}
-                className={`p-1 rounded-md hover:bg-[#1c2936]/60 transition-colors ${wifiEnabled ? 'text-cyan-400' : 'text-gray-600'}`}
-              >
-                <Wifi className="w-4 h-4 md:w-5 md:h-5" />
-              </button>
-              <WifiPopup
-                isOpen={wifiPopupOpen}
-                onClose={() => setWifiPopupOpen(false)}
-                isEnabled={wifiEnabled}
-                onToggle={() => setWifiEnabled(!wifiEnabled)}
+          <div className={getGridClasses()}>
+            {filteredTerrariums.map((terrarium, index) => (
+              <TerrariumCard
+                key={terrarium.id}
+                terrarium={terrarium}
+                viewMode={viewMode}
+                index={index}
+                onSettingsClick={handleSettingsClick}
+                onToggle={toggleTerrarium}
+                onInfoClick={handleInfoClick}
+                selectedTerrarium={selectedTerrarium}
+                infoPopupOpen={infoPopupOpen}
+                onReorder={handleReorderTerrariums}
               />
-            </div>
-            <div className="relative">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setBluetoothPopupOpen(!bluetoothPopupOpen);
-                  setWifiPopupOpen(false);
-                  setGeneralSettingsOpen(false);
-                }}
-                className={`p-1 rounded-md hover:bg-[#1c2936]/60 transition-colors ${bluetoothEnabled ? 'text-cyan-400' : 'text-gray-600'}`}
-              >
-                <Bluetooth className="w-4 h-4 md:w-5 md:h-5" />
-              </button>
-              <BluetoothPopup
-                isOpen={bluetoothPopupOpen}
-                onClose={() => setBluetoothPopupOpen(false)}
-                isEnabled={bluetoothEnabled}
-                onToggle={() => setBluetoothEnabled(!bluetoothEnabled)}
-              />
-            </div>
-            <div className="relative">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setGeneralSettingsOpen(!generalSettingsOpen);
-                  setWifiPopupOpen(false);
-                  setBluetoothPopupOpen(false);
-                }}
-                className="p-1 rounded-md hover:bg-[#1c2936]/60 transition-colors text-cyan-400"
-              >
-                <Settings2 className="w-4 h-4 md:w-5 md:h-5" />
-              </button>
-              <GeneralSettingsPopup
-                isOpen={generalSettingsOpen}
-                onClose={() => setGeneralSettingsOpen(false)}
-                onAvatarUpdate={handleAvatarUpdate}
-              />
-            </div>
+            ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-          {terrariums.map((terrarium) => (
-            <div key={terrarium.id} className="bg-[#141e2a]/60 rounded-2xl overflow-hidden">
-              <div className="relative">
-                <img 
-                  src={terrarium.image} 
-                  alt={terrarium.name}
-                  className={`w-full aspect-[4/5] xs:aspect-[3/4] sm:aspect-square lg:aspect-[4/5] object-cover transition-all duration-300 ${!terrarium.isActive ? 'grayscale brightness-50' : ''}`}
+    <DragDropProvider>
+      <div className="min-h-screen bg-[#0a1119]" onClick={handleClickOutside}>
+        <div className="container-fluid py-3 sm:py-4 lg:py-6">
+          <MobileOptimizedHeader
+            currentTime={currentTime}
+            avatarUrl={avatarUrl}
+            accountMenuOpen={accountMenuOpen}
+            onAccountToggle={(e) => {
+              e.stopPropagation();
+              setAccountMenuOpen(!accountMenuOpen);
+            }}
+            onNetworkClick={() => {}}
+            wifiEnabled={wifiEnabled}
+            onWifiToggle={(e) => {
+              e.stopPropagation();
+              setWifiPopupOpen(!wifiPopupOpen);
+              setBluetoothPopupOpen(false);
+              setGeneralSettingsOpen(false);
+            }}
+            bluetoothEnabled={bluetoothEnabled}
+            onBluetoothToggle={(e) => {
+              e.stopPropagation();
+              setBluetoothPopupOpen(!bluetoothPopupOpen);
+              setWifiPopupOpen(false);
+              setGeneralSettingsOpen(false);
+            }}
+            onGeneralSettingsToggle={(e) => {
+              e.stopPropagation();
+              setGeneralSettingsOpen(!generalSettingsOpen);
+              setWifiPopupOpen(false);
+              setBluetoothPopupOpen(false);
+            }}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            showAll={showAll}
+            onShowAllChange={setShowAll}
+          />
+
+          <div className={getGridClasses()}>
+            {filteredTerrariums.map((terrarium, index) => (
+              <div key={terrarium.id}>
+                <TerrariumCard
+                  terrarium={terrarium}
+                  viewMode={viewMode}
+                  index={index}
+                  onSettingsClick={handleSettingsClick}
+                  onToggle={toggleTerrarium}
+                  onInfoClick={handleInfoClick}
+                  selectedTerrarium={selectedTerrarium}
+                  infoPopupOpen={infoPopupOpen}
+                  onReorder={handleReorderTerrariums}
                 />
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#141e2a]/95" />
-                <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
-                  <h2 className="text-xl sm:text-2xl font-bold text-cyan-400 mb-4 sm:mb-6 line-clamp-2 text-balance">{terrarium.name}</h2>
-                  <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
-                    <button 
-                      onClick={(e) => handleSettingsClick(e, terrarium)}
-                      className={`bg-[#1c2936]/80 backdrop-blur-sm h-7 sm:h-9 rounded-md hover:bg-[#1c2936]/60 transition-colors flex items-center justify-center ${selectedTerrarium?.id === terrarium.id ? 'ring-2 ring-cyan-400' : ''}`}
-                    >
-                      <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
-                    </button>
-                    <button 
-                      onClick={(e) => toggleTerrarium(e, terrarium.id)}
-                      className={`bg-[#1c2936]/80 backdrop-blur-sm h-7 sm:h-9 rounded-md hover:bg-[#1c2936]/60 transition-colors flex items-center justify-center ${terrarium.isActive ? 'ring-2 ring-green-400' : ''}`}
-                    >
-                      <Power className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${terrarium.isActive ? 'text-green-400' : 'text-gray-400'}`} />
-                    </button>
-                    <div className="relative">
-                      <button 
-                        onClick={(e) => handleInfoClick(e, terrarium.id)}
-                        className={`w-full bg-[#1c2936]/80 backdrop-blur-sm h-7 sm:h-9 rounded-md hover:bg-[#1c2936]/60 transition-colors flex items-center justify-center ${infoPopupOpen === terrarium.id ? 'ring-2 ring-cyan-400' : ''}`}
-                      >
-                        <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
-                      </button>
-                      {terrarium.animal && infoPopupOpen === terrarium.id && (
-                        <AnimalInfoPopup
-                          isOpen={true}
-                          onClose={() => setInfoPopupOpen(null)}
-                          animal={terrarium.animal}
-                        />
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-7 gap-1.5 sm:gap-3 mt-1.5 sm:mt-3">
-                    <div className="bg-[#1c2936]/80 backdrop-blur-sm h-7 sm:h-9 rounded-md flex items-center justify-center gap-1">
-                      <Thermometer className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
-                      <span className="text-[10px] sm:text-xs text-cyan-400">{terrarium.temperature}°</span>
-                    </div>
-                    <div className="bg-[#1c2936]/80 backdrop-blur-sm h-7 sm:h-9 rounded-md flex items-center justify-center gap-1">
-                      <Droplet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
-                      <span className="text-[10px] sm:text-xs text-cyan-400">{terrarium.humidity}%</span>
-                    </div>
-                    <div className="bg-[#1c2936]/80 backdrop-blur-sm h-7 sm:h-9 rounded-md flex items-center justify-center gap-1">
-                      <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
-                      <span className="text-[10px] sm:text-xs text-cyan-400">{terrarium.lightLevel}%</span>
-                    </div>
-                    <div className="bg-[#1c2936]/80 backdrop-blur-sm h-7 sm:h-9 rounded-md flex items-center justify-center gap-1">
-                      <Leaf className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
-                      <span className="text-[10px] sm:text-xs text-cyan-400">72%</span>
-                    </div>
-                    <div className="bg-[#1c2936]/80 backdrop-blur-sm h-7 sm:h-9 rounded-md flex items-center justify-center gap-1">
-                      <Gauge className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
-                      <span className="text-[10px] sm:text-xs text-cyan-400">85%</span>
-                    </div>
-                    <div className="bg-[#1c2936]/80 backdrop-blur-sm h-7 sm:h-9 rounded-md flex items-center justify-center gap-1">
-                      <Flask className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
-                      <span className="text-[10px] sm:text-xs text-cyan-400">92%</span>
-                    </div>
-                    <div className="bg-[#1c2936]/80 backdrop-blur-sm h-7 sm:h-9 rounded-md flex items-center justify-center gap-1">
-                      <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
-                      <span className="text-[10px] sm:text-xs text-cyan-400">6.8</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-7 gap-1.5 sm:gap-3 mt-1.5 sm:mt-1">
-                    <div className="text-center text-[10px] sm:text-xs text-gray-400">Temp</div>
-                    <div className="text-center text-[10px] sm:text-xs text-gray-400">Humid</div>
-                    <div className="text-center text-[10px] sm:text-xs text-gray-400">Light</div>
-                    <div className="text-center text-[10px] sm:text-xs text-gray-400">Soil</div>
-                    <div className="text-center text-[10px] sm:text-xs text-gray-400">Air</div>
-                    <div className="text-center text-[10px] sm:text-xs text-gray-400">Water</div>
-                    <div className="text-center text-[10px] sm:text-xs text-gray-400">EC</div>
-                  </div>
-                </div>
+                {terrarium.animal && infoPopupOpen === terrarium.id && (
+                  <AnimalInfoPopup
+                    isOpen={true}
+                    onClose={() => setInfoPopupOpen(null)}
+                    animal={terrarium.animal}
+                  />
+                )}
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
 
-      {selectedTerrarium && (
-        <TerrariumSettingsPopup
-          isOpen={settingsPopupOpen}
-          onClose={() => {
-            setSettingsPopupOpen(false);
-            setSelectedTerrarium(null);
-          }}
-          terrarium={selectedTerrarium}
-          onSave={handleSaveSettings}
+        {/* Popups */}
+        <WifiPopup
+          isOpen={wifiPopupOpen}
+          onClose={() => setWifiPopupOpen(false)}
+          isEnabled={wifiEnabled}
+          onToggle={() => setWifiEnabled(!wifiEnabled)}
         />
-      )}
-    </div>
+        
+        <BluetoothPopup
+          isOpen={bluetoothPopupOpen}
+          onClose={() => setBluetoothPopupOpen(false)}
+          isEnabled={bluetoothEnabled}
+          onToggle={() => setBluetoothEnabled(!bluetoothEnabled)}
+        />
+        
+        <GeneralSettingsPopup
+          isOpen={generalSettingsOpen}
+          onClose={() => setGeneralSettingsOpen(false)}
+          onAvatarUpdate={handleAvatarUpdate}
+        />
   );
 }
 
+        {selectedTerrarium && (
+          <TerrariumSettingsPopup
+            isOpen={settingsPopupOpen}
+            onClose={() => {
+              setSettingsPopupOpen(false);
+              setSelectedTerrarium(null);
+            }}
+            terrarium={selectedTerrarium}
+            onSave={handleSaveSettings}
+          />
+        )}
+      </div>
+    </DragDropProvider>
 export default App;
