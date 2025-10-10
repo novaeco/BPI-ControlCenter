@@ -2,7 +2,7 @@ import type { PromisifiedBus } from 'i2c-bus';
 import { openPromisified } from 'i2c-bus';
 import Bme280 from 'bme280-sensor';
 import { env } from '../config/env';
-import { prisma } from './prisma';
+import { SensorReading } from '../models';
 import { logger } from '../utils/logger';
 import { readRelayStates } from './gpioService';
 import { SENSOR_TYPES, SensorType, type SensorValueDto } from '../../../shared/sensors';
@@ -97,13 +97,11 @@ export const readSensors = async (): Promise<SensorValueDto[]> => {
   if (hardwareValues.length > 0) {
     await Promise.all(
       hardwareValues.map((value) =>
-        prisma.sensorReading.create({
-          data: {
-            sensorType: value.type,
-            value: value.value,
-            unit: value.unit,
-            capturedAt: new Date(timestamp)
-          }
+        SensorReading.create({
+          sensorType: value.type,
+          value: value.value,
+          unit: value.unit,
+          capturedAt: new Date(timestamp)
         })
       )
     );
@@ -119,9 +117,9 @@ export const readSensors = async (): Promise<SensorValueDto[]> => {
   }
 
   if (readings.length === 0) {
-    const fallback = await prisma.sensorReading.findMany({
-      orderBy: { capturedAt: 'desc' },
-      take: 4
+    const fallback = await SensorReading.findAll({
+      order: [['capturedAt', 'DESC']],
+      limit: 4
     });
 
     readings.push(
@@ -135,9 +133,9 @@ export const readSensors = async (): Promise<SensorValueDto[]> => {
   }
 
   if (!readings.some((reading) => reading.sensorType === SENSOR_TYPES.UV)) {
-    const uvReading = await prisma.sensorReading.findFirst({
+    const uvReading = await SensorReading.findOne({
       where: { sensorType: SENSOR_TYPES.UV },
-      orderBy: { capturedAt: 'desc' }
+      order: [['capturedAt', 'DESC']]
     });
     if (uvReading) {
       readings.push({

@@ -1,11 +1,11 @@
 import { createServer } from 'http';
 import { createApp } from './app';
 import { env } from './config/env';
-import { connectDatabase } from './services/prisma';
+import { initDatabase } from './models';
 import { logger } from './utils/logger';
 
 const bootstrap = async (): Promise<void> => {
-  await connectDatabase();
+  await initDatabase();
   const app = createApp();
   const server = createServer(app);
 

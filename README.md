@@ -5,7 +5,7 @@ Suite logicielle complète pour piloter une Banana Pi BPI‑F3 (SoC SpacemiT K
 - **Front-end** React/TypeScript (Vite + Tailwind CSS) alimenté par des données temps réel.
 - **Back-end** Node.js/TypeScript (Express) exposant des API REST sécurisées par JWT.
 - **Intégration matérielle** (Wi‑Fi, Bluetooth, capteurs I²C, GPIO) via NetworkManager, bluetoothctl, i2c-bus, onoff.
-- **Base de données** SQLite gérée par Prisma.
+- **Base de données** SQLite gérée par Sequelize (ORM compatible RISC-V).
 
 ## 1. Prérequis matériels et logiciels
 
@@ -37,18 +37,16 @@ cd BPI-ControlCenter
 
 # Configuration des variables d’environnement
 cp .env.example .env
-# Éditez .env pour définir les secrets JWT et l’URL de la base (sqlite par défaut)
+# Éditez .env pour définir les secrets JWT et le chemin SQLite (`DB_PATH`)
 # - `GPIO_RELAY_PINS` accepte un tableau JSON (ex. `[17, 18]`) pour activer la gestion des relais/LED via GPIO
 
 # Installation des dépendances
 npm install
-
-# Génération du client Prisma et migration de la base
-npx prisma generate
-npx prisma migrate deploy
 ```
 
-> ⚠️ Par défaut la base SQLite est créée dans `prisma/dev.db`. Sur SSD, ajustez `DATABASE_URL` (ex. `file:/mnt/ssd/bpi-controlcenter.db`).
+Les tables SQLite sont créées/ajustées automatiquement par Sequelize au premier démarrage (`sequelize.sync({ alter: true })`).
+
+> 💡 Pour un déploiement automatisé sur Banana Pi, utilisez le script `setup_bpi_controlcenter.sh` (il installe les dépendances, construit le front/back et exécute `initDatabase` pour initialiser le fichier SQLite).
 
 ## 3. Démarrer les services
 
@@ -80,19 +78,23 @@ L’API écoute sur `http://localhost:4000/api` par défaut (configurable via `P
 
 ## 4. Authentification et comptes
 
-La première connexion nécessite un utilisateur en base. Exemple de création manuelle via Prisma Studio :
+La première connexion nécessite un utilisateur en base. Après le premier démarrage de l’API (qui crée les tables), vous pouvez insérer un compte administrateur via `sqlite3` :
 
 ```bash
-npx prisma studio
-```
-
-Ajoutez un utilisateur avec `email` et `password_hash` (hachage bcrypt). Exemple pour créer un compte admin :
-
-```bash
+# Génère un hachage bcrypt
 node -e "const bcrypt=require('bcryptjs'); bcrypt.hash('MotDePasseFort',10).then(console.log);"
+HASH="<collez-le-hash>"
+
+# Insère l'utilisateur dans la base (par défaut ./data/database.sqlite)
+sqlite3 ./data/database.sqlite <<'SQL'
+INSERT INTO users (id, email, passwordHash, role, createdAt, updatedAt)
+VALUES (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-' || '4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab',abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6))),
+       'admin@example.com', '$HASH', 'ADMIN', datetime('now'), datetime('now'))
+ON CONFLICT(email) DO UPDATE SET passwordHash = excluded.passwordHash, role = excluded.role, updatedAt = excluded.updatedAt;
+SQL
 ```
 
-Copiez le hachage dans la colonne `password_hash` et définissez `role` à `ADMIN`.
+Adaptez l’adresse e-mail, le rôle (`ADMIN` ou `USER`) et le hachage en fonction de vos besoins.
 
 ## 5. API REST
 
@@ -103,7 +105,6 @@ La documentation OpenAPI est disponible dans `server/openapi.yaml`. Principaux e
 - `GET/POST /api/bluetooth/*` – Gestion Bluetooth via `bluetoothctl`.
 - `GET /api/system/info` – Informations noyau, charge CPU, mémoire, disques, température.
 - `GET /api/sensors` – Lecture capteurs BME280 (température/humidité), BH1750 (luminosité) et états des relais GPIO (via onoff) + fallback DB.
-- `GET /api/sensors` – Lecture capteurs BME280 (température/humidité) et BH1750 (luminosité) + fallback DB.
 - `CRUD /api/terrariums` – Gestion des enclos, mesures, statut.
 - `GET/POST /api/settings` – Préférences globales.
 
@@ -125,7 +126,7 @@ Les tests isolent la logique en simulant l’accès matériel/DB.
    ```bash
    sudo cp server/systemd/bpi-controlcenter.service /etc/systemd/system/
    ```
-2. Créez un fichier `/etc/bpi-controlcenter.env` contenant les variables d’environnement (`DATABASE_URL`, `JWT_ACCESS_SECRET`, etc.).
+2. Créez un fichier `/etc/bpi-controlcenter.env` contenant les variables d’environnement (`DB_PATH`, `JWT_ACCESS_SECRET`, etc.).
 3. Déployez l’application dans `/opt/bpi-controlcenter` (ou ajustez `WorkingDirectory`).
 4. Activez puis démarrez le service :
    ```bash
@@ -153,10 +154,10 @@ Les tests isolent la logique en simulant l’accès matériel/DB.
 
 ```
 BPI-ControlCenter/
-├── prisma/                 # Schéma Prisma et migrations
 ├── public/                 # Assets statiques
 ├── server/
 │   ├── src/                # Code TypeScript du back-end
+│   │   └── models/         # Modèles Sequelize + initialisation
 │   ├── tests/              # Tests Vitest/Supertest
 │   └── systemd/            # Service systemd prêt à l'emploi
 ├── src/                    # Front-end React/TypeScript
@@ -170,7 +171,7 @@ BPI-ControlCenter/
 
 | Variable | Description |
 | --- | --- |
-| `DATABASE_URL` | URL Prisma (ex. `file:./prisma/dev.db`) |
+| `DB_PATH` | Chemin du fichier SQLite (ex. `./data/database.sqlite`) |
 | `JWT_ACCESS_SECRET` | Secret JWT accès (≥32 caractères recommandés) |
 | `JWT_REFRESH_SECRET` | Secret JWT refresh |
 | `PORT` | Port HTTP de l’API (défaut 4000) |

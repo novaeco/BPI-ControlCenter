@@ -1,19 +1,5 @@
-import { prisma } from './prisma';
+import { Terrarium } from '../models';
 import { HttpError } from '../middleware/errorHandler';
-
-export const terrariumSelect = {
-  id: true,
-  name: true,
-  description: true,
-  type: true,
-  isActive: true,
-  temperature: true,
-  humidity: true,
-  lightLevel: true,
-  uviLevel: true,
-  createdAt: true,
-  updatedAt: true
-} as const;
 
 export interface TerrariumResponse {
   id: string;
@@ -29,21 +15,50 @@ export interface TerrariumResponse {
   updatedAt: Date;
 }
 
-export const listTerrariums = async (): Promise<TerrariumResponse[]> =>
-  prisma.terrarium.findMany({
-    select: terrariumSelect,
-    orderBy: { createdAt: 'asc' }
-  });
+const mapTerrarium = (terrarium: Terrarium): TerrariumResponse => {
+  const {
+    id,
+    name,
+    description,
+    type,
+    isActive,
+    temperature,
+    humidity,
+    lightLevel,
+    uviLevel,
+    createdAt,
+    updatedAt
+  } = terrarium.get({ plain: true });
+
+  const created = createdAt instanceof Date ? createdAt : new Date(createdAt ?? Date.now());
+  const updated = updatedAt instanceof Date ? updatedAt : created;
+
+  return {
+    id,
+    name,
+    description,
+    type,
+    isActive,
+    temperature,
+    humidity,
+    lightLevel,
+    uviLevel,
+    createdAt: created,
+    updatedAt: updated
+  };
+};
+
+export const listTerrariums = async (): Promise<TerrariumResponse[]> => {
+  const terrariums = await Terrarium.findAll({ order: [['createdAt', 'ASC']] });
+  return terrariums.map(mapTerrarium);
+};
 
 export const getTerrarium = async (id: string): Promise<TerrariumResponse> => {
-  const terrarium = await prisma.terrarium.findUnique({
-    where: { id },
-    select: terrariumSelect
-  });
+  const terrarium = await Terrarium.findByPk(id);
   if (!terrarium) {
     throw new HttpError(404, 'Terrarium introuvable');
   }
-  return terrarium;
+  return mapTerrarium(terrarium);
 };
 
 export interface TerrariumInput {
@@ -58,19 +73,19 @@ export interface TerrariumInput {
 }
 
 export const createTerrarium = async (payload: TerrariumInput): Promise<TerrariumResponse> => {
-  return prisma.terrarium.create({
-    data: payload,
-    select: terrariumSelect
-  });
+  const terrarium = await Terrarium.create(payload);
+  return mapTerrarium(terrarium);
 };
 
 export const updateTerrarium = async (id: string, payload: Partial<TerrariumInput>): Promise<TerrariumResponse> => {
   try {
-    return await prisma.terrarium.update({
-      where: { id },
-      data: payload,
-      select: terrariumSelect
-    });
+    const terrarium = await Terrarium.findByPk(id);
+    if (!terrarium) {
+      throw new HttpError(404, 'Terrarium introuvable');
+    }
+    terrarium.set(payload);
+    await terrarium.save();
+    return mapTerrarium(terrarium);
   } catch (error) {
     throw new HttpError(404, 'Terrarium introuvable', error);
   }
@@ -78,7 +93,10 @@ export const updateTerrarium = async (id: string, payload: Partial<TerrariumInpu
 
 export const deleteTerrarium = async (id: string): Promise<void> => {
   try {
-    await prisma.terrarium.delete({ where: { id } });
+    const deleted = await Terrarium.destroy({ where: { id } });
+    if (deleted === 0) {
+      throw new HttpError(404, 'Terrarium introuvable');
+    }
   } catch (error) {
     throw new HttpError(404, 'Terrarium introuvable', error);
   }
