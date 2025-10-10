@@ -5,25 +5,7 @@ import { env } from '../config/env';
 import { prisma } from './prisma';
 import { logger } from '../utils/logger';
 import { readRelayStates } from './gpioService';
-
-export const SENSOR_TYPES = {
-  TEMPERATURE: 'TEMPERATURE',
-  HUMIDITY: 'HUMIDITY',
-  LIGHT: 'LIGHT',
-  UV: 'UV',
-  RELAY: 'RELAY'
-  UV: 'UV'
-} as const;
-
-export type SensorType = (typeof SENSOR_TYPES)[keyof typeof SENSOR_TYPES];
-
-export interface SensorValueDto {
-  sensorType: SensorType;
-  value: number;
-  unit: string;
-  timestamp: string;
-  label?: string;
-}
+import { SENSOR_TYPES, SensorType, type SensorValueDto } from '../../../shared/sensors';
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
