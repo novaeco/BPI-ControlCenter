@@ -1,0 +1,14 @@
+[Unit]
+Description=BPI Control Center API
+After=network.target
+
+[Service]
+EnvironmentFile=/etc/bpi-controlcenter.env
+WorkingDirectory=/opt/bpi-controlcenter
+ExecStart=/usr/bin/node /opt/bpi-controlcenter/dist/server/index.js
+Restart=on-failure
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target
