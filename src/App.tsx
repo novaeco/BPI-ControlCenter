@@ -409,11 +409,44 @@ function App() {
     setAvatarUrl(newAvatarUrl);
   };
 
-  const handleReorderTerrariums = (fromIndex: number, toIndex: number) => {
-    const newTerrariums = [...terrariums];
-    const [movedItem] = newTerrariums.splice(fromIndex, 1);
-    newTerrariums.splice(toIndex, 0, movedItem);
+  const handleReorderTerrariums = (sourceId: number, targetId: number) => {
+    if (sourceId === targetId) {
+      return;
+    }
+
+    const displayedTerrariums = showAll
+      ? terrariums
+      : terrariums.filter(terrarium => terrarium.isActive);
+
+    const sourceIndexInDisplayed = displayedTerrariums.findIndex(terrarium => terrarium.id === sourceId);
+    const targetIndexInDisplayed = displayedTerrariums.findIndex(terrarium => terrarium.id === targetId);
+
+    if (sourceIndexInDisplayed === -1 || targetIndexInDisplayed === -1) {
+      return;
+    }
+
+    const reorderedDisplayed = [...displayedTerrariums];
+    const [movedTerrarium] = reorderedDisplayed.splice(sourceIndexInDisplayed, 1);
+    reorderedDisplayed.splice(targetIndexInDisplayed, 0, movedTerrarium);
+
+    let newTerrariums: AquariumType[];
+
+    if (showAll) {
+      newTerrariums = reorderedDisplayed;
+    } else {
+      let displayIndex = 0;
+      newTerrariums = terrariums.map(terrarium => {
+        if (!terrarium.isActive) {
+          return terrarium;
+        }
+        const reorderedTerrarium = reorderedDisplayed[displayIndex];
+        displayIndex += 1;
+        return reorderedTerrarium ?? terrarium;
+      });
+    }
+
     setTerrariums(newTerrariums);
+    saveToLocalStorage('terrariumOrder', newTerrariums);
   };
 
   const filteredTerrariums = showAll 
@@ -466,12 +499,11 @@ function App() {
           />
 
           <div className={getGridClasses()}>
-            {filteredTerrariums.map((terrarium, index) => (
+            {filteredTerrariums.map((terrarium) => (
               <div key={terrarium.id}>
                 <TerrariumCard
                   terrarium={terrarium}
                   viewMode={viewMode}
-                  index={index}
                   onSettingsClick={handleSettingsClick}
                   onToggle={toggleTerrarium}
                   onInfoClick={handleInfoClick}
