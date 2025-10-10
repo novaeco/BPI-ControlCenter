@@ -4,7 +4,7 @@
   "compilerOptions": {
     "composite": false,
     "outDir": "../dist/server",
-    "rootDir": "./src",
+    "rootDir": "../",
     "module": "ES2022",
     "target": "ES2022",
     "lib": ["ES2022"],
@@ -18,8 +18,7 @@
     "noUnusedParameters": true,
     "skipLibCheck": true,
     "types": ["node"]
-    "skipLibCheck": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../shared/**/*"],
   "exclude": ["node_modules", "dist"]
 }

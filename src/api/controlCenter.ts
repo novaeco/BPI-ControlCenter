@@ -1,4 +1,5 @@
 import { apiRequest } from './client';
+import type { SensorValue } from '../../shared/sensors';
 
 export interface WifiStatusResponse {
   enabled: boolean;
@@ -44,18 +45,6 @@ export interface SystemInfo {
     mountpoint: string;
   }>;
   cpuTemperatureC: number | null;
-}
-
-export interface SensorValue {
-  sensorType: 'TEMPERATURE' | 'HUMIDITY' | 'LIGHT' | 'UV' | 'RELAY';
-  value: number;
-  unit: string;
-  timestamp: string;
-  label?: string;
-  sensorType: 'TEMPERATURE' | 'HUMIDITY' | 'LIGHT' | 'UV';
-  value: number;
-  unit: string;
-  timestamp: string;
 }
 
 export interface TerrariumDto {

@@ -16,8 +16,8 @@ import {
   useCreateTerrarium,
   useDeleteTerrarium
 } from './api/hooks';
-import type { SensorValue, TerrariumInput } from './api/controlCenter';
 import type { TerrariumInput } from './api/controlCenter';
+import { SensorType, type SensorValue } from '../shared/sensors';
 
 const formatSeconds = (seconds: number): string => {
   const days = Math.floor(seconds / 86400);
@@ -27,25 +27,11 @@ const formatSeconds = (seconds: number): string => {
 };
 
 const formatSensorValue = (sensor: SensorValue): string => {
-  if (sensor.sensorType === 'RELAY' || sensor.unit === 'state') {
+  if (sensor.sensorType === SensorType.RELAY || sensor.unit === 'state') {
     return sensor.value === 1 ? 'Activé' : 'Désactivé';
   }
   return `${sensor.value} ${sensor.unit}`;
 };
-
-const App: React.FC = () => {
-  const { isAuthenticated, logout } = useAuth();
-  const queryClient = useQueryClient();
-  const [terrariumForm, setTerrariumForm] = useState<TerrariumInput>({
-    name: '',
-    type: 'custom',
-    description: '',
-    isActive: true,
-    temperature: 28,
-    humidity: 60,
-    lightLevel: 70,
-    uviLevel: 6
-  });
 
 const App: React.FC = () => {
   const { isAuthenticated, logout } = useAuth();
@@ -211,9 +197,6 @@ const App: React.FC = () => {
                 <div key={`${sensor.sensorType}-${sensor.timestamp}-${sensor.label ?? ''}`} className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-4">
                   <p className="text-sm text-slate-400">{sensor.label ?? sensor.sensorType}</p>
                   <p className="text-2xl font-semibold text-cyan-300">{formatSensorValue(sensor)}</p>
-                <div key={`${sensor.sensorType}-${sensor.timestamp}`} className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-4">
-                  <p className="text-sm text-slate-400">{sensor.sensorType}</p>
-                  <p className="text-2xl font-semibold text-cyan-300">{sensor.value} {sensor.unit}</p>
                   <p className="text-xs text-slate-500 mt-2">
                     {new Date(sensor.timestamp).toLocaleTimeString()}
                   </p>
