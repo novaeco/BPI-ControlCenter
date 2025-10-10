@@ -1,0 +1,489 @@
+openapi: 3.1.0
+info:
+  title: BPI Control Center API
+  version: 1.0.0
+  description: >-
+    API REST sécurisée pour la gestion du centre de contrôle domotique Banana Pi F3.
+servers:
+  - url: http://localhost:4000/api
+paths:
+  /auth/login:
+    post:
+      summary: Authentifier un utilisateur et retourner un jeton JWT
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Jetons générés
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/refresh:
+    post:
+      summary: Rafraîchir les jetons d'accès
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Nouveaux jetons
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /wifi/status:
+    get:
+      summary: Obtenir l'état du Wi-Fi
+      tags: [WiFi]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: État du Wi-Fi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /wifi/toggle:
+    post:
+      summary: Activer ou désactiver le Wi-Fi
+      tags: [WiFi]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: État mis à jour
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /wifi/networks:
+    get:
+      summary: Scanner les réseaux Wi-Fi
+      tags: [WiFi]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Liste des réseaux
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WifiNetwork'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /bluetooth/status:
+    get:
+      summary: Obtenir l'état du Bluetooth
+      tags: [Bluetooth]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: État Bluetooth
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  powered:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /bluetooth/toggle:
+    post:
+      summary: Activer ou désactiver le Bluetooth
+      tags: [Bluetooth]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                powered:
+                  type: boolean
+      responses:
+        '200':
+          description: État mis à jour
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  powered:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /bluetooth/devices:
+    get:
+      summary: Lister les appareils Bluetooth
+      tags: [Bluetooth]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Appareils découverts et appairés
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  discovered:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BluetoothDevice'
+                  paired:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BluetoothDevice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /system/info:
+    get:
+      summary: Récupérer les informations système
+      tags: [Système]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Informations système
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /sensors:
+    get:
+      summary: Lire les capteurs connectés
+      tags: [Capteurs]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Valeurs des capteurs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SensorValue'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /terrariums:
+    get:
+      summary: Lister les terrariums
+      tags: [Terrariums]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Liste des terrariums
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Terrarium'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Créer un terrarium
+      tags: [Terrariums]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TerrariumInput'
+      responses:
+        '201':
+          description: Terrarium créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Terrarium'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /terrariums/{id}:
+    get:
+      summary: Consulter un terrarium
+      tags: [Terrariums]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TerrariumId'
+      responses:
+        '200':
+          description: Terrarium
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Terrarium'
+        '404':
+          description: Non trouvé
+    put:
+      summary: Mettre à jour un terrarium
+      tags: [Terrariums]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TerrariumId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TerrariumInput'
+      responses:
+        '200':
+          description: Terrarium mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Terrarium'
+    delete:
+      summary: Supprimer un terrarium
+      tags: [Terrariums]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TerrariumId'
+      responses:
+        '204':
+          description: Supprimé
+  /settings:
+    get:
+      summary: Lister les paramètres
+      tags: [Paramètres]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Paramètres globaux
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Setting'
+    post:
+      summary: Mettre à jour un paramètre
+      tags: [Paramètres]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value]
+              properties:
+                key:
+                  type: string
+                value:
+                  oneOf:
+                    - type: string
+                    - type: number
+                    - type: boolean
+                    - type: object
+                    - type: array
+      responses:
+        '200':
+          description: Paramètre mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Setting'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TerrariumId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: Jeton invalide ou manquant
+  schemas:
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+          description: Durée de validité du jeton d'accès en secondes
+    WifiNetwork:
+      type: object
+      properties:
+        ssid:
+          type: string
+        signal:
+          type: integer
+        secure:
+          type: boolean
+    BluetoothDevice:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        paired:
+          type: boolean
+    SystemInfo:
+      type: object
+      properties:
+        kernel:
+          type: string
+        uptimeSeconds:
+          type: number
+        loadAverage:
+          type: array
+          items:
+            type: number
+        cpuCount:
+          type: integer
+        memory:
+          type: object
+          properties:
+            totalMb: { type: number }
+            usedMb: { type: number }
+            freeMb: { type: number }
+        disks:
+          type: array
+          items:
+            type: object
+            properties:
+              filesystem: { type: string }
+              size: { type: string }
+              used: { type: string }
+              available: { type: string }
+              capacity: { type: string }
+              mountpoint: { type: string }
+        cpuTemperatureC:
+          type: number
+          nullable: true
+    SensorValue:
+      type: object
+      properties:
+        sensorType:
+          type: string
+          enum: [TEMPERATURE, HUMIDITY, LIGHT, UV, RELAY]
+        value:
+          type: number
+        unit:
+          type: string
+          description: "Unité de mesure ou 'state' pour les relais GPIO"
+        timestamp:
+          type: string
+          format: date-time
+        label:
+          type: string
+          description: Libellé lisible pour identifier le capteur ou le relais
+    Terrarium:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description:
+          type: string
+          nullable: true
+        type: { type: string }
+        isActive: { type: boolean }
+        temperature: { type: number }
+        humidity: { type: number }
+        lightLevel: { type: number }
+        uviLevel: { type: number }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TerrariumInput:
+      type: object
+      required:
+        - name
+        - type
+        - isActive
+        - temperature
+        - humidity
+        - lightLevel
+        - uviLevel
+      properties:
+        name: { type: string }
+        description:
+          type: string
+          nullable: true
+        type: { type: string }
+        isActive: { type: boolean }
+        temperature: { type: number }
+        humidity: { type: number }
+        lightLevel: { type: number }
+        uviLevel: { type: number }
+    Setting:
+      type: object
+      properties:
+        key: { type: string }
+        value: {}
+        updatedAt:
+          type: string
+          format: date-time
