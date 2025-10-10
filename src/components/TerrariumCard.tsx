@@ -12,8 +12,7 @@ interface TerrariumCardProps {
   onInfoClick: (e: React.MouseEvent, id: number) => void;
   selectedTerrarium: AquariumType | null;
   infoPopupOpen: number | null;
-  onReorder: (fromIndex: number, toIndex: number) => void;
-  index: number;
+  onReorder: (sourceId: number, targetId: number) => void;
 }
 
 const TerrariumCard: React.FC<TerrariumCardProps> = ({
@@ -24,10 +23,9 @@ const TerrariumCard: React.FC<TerrariumCardProps> = ({
   onInfoClick,
   selectedTerrarium,
   infoPopupOpen,
-  onReorder,
-  index
+  onReorder
 }) => {
-  const { draggedItem, draggedOverItem, isDragging, startDrag, endDrag, dragOver, dragLeave } = useDragDrop();
+  const { draggedItem, draggedOverItem, startDrag, endDrag, dragOver, dragLeave } = useDragDrop();
   const isDraggedOver = draggedOverItem === terrarium.id;
   const isBeingDragged = draggedItem === terrarium.id;
 
@@ -54,11 +52,8 @@ const TerrariumCard: React.FC<TerrariumCardProps> = ({
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    if (draggedItem && draggedItem !== terrarium.id) {
-      // Find indices for reordering
-      const fromIndex = index;
-      const toIndex = index; // This would need to be calculated based on actual layout
-      onReorder(fromIndex, toIndex);
+    if (draggedItem !== null && draggedItem !== terrarium.id) {
+      onReorder(draggedItem, terrarium.id);
     }
     endDrag();
   };
