@@ -22,5 +22,18 @@ export default defineConfig({
   esbuild: {
     legalComments: 'none',
     treeShaking: true
+  },
+  test: {
+    globals: true,
+    environment: 'node',
+    include: ['server/tests/**/*.test.ts'],
+    setupFiles: ['server/tests/setup.ts'],
+    deps: {
+      optimizer: {
+        ssr: {
+          include: ['supertest']
+        }
+      }
+    }
   }
 });

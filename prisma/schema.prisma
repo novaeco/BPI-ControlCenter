@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         String   @default("USER")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+}
+
+model Terrarium {
+  id            String          @id @default(cuid())
+  name          String
+  description   String?
+  type          String
+  isActive      Boolean         @default(true) @map("is_active")
+  temperature   Float           @default(0)
+  humidity      Float           @default(0)
+  lightLevel    Float           @default(0) @map("light_level")
+  uviLevel      Float           @default(0) @map("uvi_level")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  sensorReadings SensorReading[]
+}
+
+model SensorReading {
+  id          String      @id @default(cuid())
+  terrariumId String?     @map("terrarium_id")
+  sensorType  String      @map("sensor_type")
+  value       Float
+  unit        String
+  capturedAt  DateTime    @default(now()) @map("captured_at")
+  terrarium   Terrarium?  @relation(fields: [terrariumId], references: [id], onDelete: Cascade)
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+}

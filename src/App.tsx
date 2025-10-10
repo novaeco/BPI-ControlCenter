@@ -1,572 +1,337 @@
-import React, { useState, useEffect } from 'react';
-import { UserCircle2 } from 'lucide-react';
-import { AquariumType } from './types';
-import WifiPopup from './components/WifiPopup';
-import BluetoothPopup from './components/BluetoothPopup';
-import TerrariumSettingsPopup from './components/TerrariumSettingsPopup';
-import GeneralSettingsPopup from './components/GeneralSettingsPopup';
-import AnimalInfoPopup from './components/AnimalInfoPopup';
-import { DragDropProvider } from './components/DragDropProvider';
-import MobileOptimizedHeader from './components/MobileOptimizedHeader';
-import TerrariumCard from './components/TerrariumCard';
-import { ViewMode } from './components/ViewToggle';
-import { loadFromLocalStorage, saveToLocalStorage } from './utils/localStorage';
+import React, { useMemo, useState } from 'react';
+import { LogOut, RefreshCcw, Wifi, Bluetooth, Thermometer, Droplet, Sun, Activity, Cpu } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import LoginForm from './components/auth/LoginForm';
+import { useAuth } from './providers/AuthProvider';
+import {
+  useBluetoothDevices,
+  useBluetoothStatus,
+  useSensors,
+  useSystemInfo,
+  useTerrariums,
+  useToggleBluetooth,
+  useToggleWifi,
+  useWifiNetworks,
+  useWifiStatus,
+  useCreateTerrarium,
+  useDeleteTerrarium
+} from './api/hooks';
+import type { TerrariumInput } from './api/controlCenter';
 
-function App() {
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [wifiEnabled, setWifiEnabled] = useState(true);
-  const [bluetoothEnabled, setBluetoothEnabled] = useState(true);
-  const [wifiPopupOpen, setWifiPopupOpen] = useState(false);
-  const [bluetoothPopupOpen, setBluetoothPopupOpen] = useState(false);
-  const [settingsPopupOpen, setSettingsPopupOpen] = useState(false);
-  const [generalSettingsOpen, setGeneralSettingsOpen] = useState(false);
-  const [selectedTerrarium, setSelectedTerrarium] = useState<AquariumType | null>(null);
-  const [infoPopupOpen, setInfoPopupOpen] = useState<number | null>(null);
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>(() => 
-    loadFromLocalStorage<ViewMode>('viewMode', 'grid')
-  );
-  const [showAll, setShowAll] = useState(() => 
-    loadFromLocalStorage<boolean>('showAll', true)
-  );
+const formatSeconds = (seconds: number): string => {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${days}j ${hours}h ${minutes}m`;
+};
 
-  const [terrariums, setTerrariums] = useState<AquariumType[]>(() => 
-    loadFromLocalStorage<AquariumType[]>('terrariumOrder', [
-    {
-      id: 1,
-      name: 'Desert Terrarium',
-      type: 'desert',
-      image: '/images/desert.jpg',
-      temperature: 28,
-      humidity: 30,
-      lightLevel: 80,
-      uviLevel: 8,
-      isActive: true,
-      animal: {
-        name: 'Spike',
-        species: 'Bearded Dragon (Pogona vitticeps)',
-        sex: 'male',
-        dateOfBirth: '2022-06-15',
-        age: '1.5 years',
-        diet: 'Insects, vegetables, fruits',
-        activity: 'diurnal',
-        habitat: 'terrestrial',
-        vetAppointments: [
-          {
-            id: '1',
-            date: '2024-03-15',
-            time: '10:00 AM',
-            reason: 'Annual checkup',
-            notes: 'General health assessment and parasite screening',
-            completed: false
-          },
-          {
-            id: '2',
-            date: '2023-12-10',
-            time: '2:30 PM',
-            reason: 'Scale condition check',
-            notes: 'All clear, healthy shedding pattern',
-            completed: true
-          }
-        ],
-        mealSchedule: [
-          {
-            id: '1',
-            dayOfWeek: 'monday',
-            time: '09:00',
-            foodType: 'Crickets',
-            quantity: '10-12 insects',
-            notes: 'Dust with calcium powder'
-          },
-          {
-            id: '2',
-            dayOfWeek: 'wednesday',
-            time: '09:00',
-            foodType: 'Mixed vegetables',
-            quantity: '1/4 cup',
-            notes: 'Include collard greens and squash'
-          },
-          {
-            id: '3',
-            dayOfWeek: 'friday',
-            time: '09:00',
-            foodType: 'Dubia roaches',
-            quantity: '8-10 insects',
-            notes: 'Dust with multivitamin powder'
-          }
-        ],
-        careRoutine: [
-          {
-            id: '1',
-            task: 'Clean water dish',
-            frequency: 'daily',
-            lastPerformed: '2024-02-28',
-            notes: 'Use dechlorinated water'
-          },
-          {
-            id: '2',
-            task: 'Spot clean enclosure',
-            frequency: 'daily',
-            lastPerformed: '2024-02-28'
-          },
-          {
-            id: '3',
-            task: 'Deep clean enclosure',
-            frequency: 'weekly',
-            lastPerformed: '2024-02-25',
-            nextDue: '2024-03-03',
-            notes: 'Replace substrate if needed'
-          },
-          {
-            id: '4',
-            task: 'UVB bulb check',
-            frequency: 'monthly',
-            lastPerformed: '2024-02-01',
-            nextDue: '2024-03-01',
-            notes: 'Check UVB output with meter'
-          }
-        ]
-      }
-    },
-    {
-      id: 2,
-      name: 'Tropical Terrarium',
-      type: 'tropical',
-      image: '/images/tropical.jpg',
-      temperature: 26,
-      humidity: 85,
-      lightLevel: 70,
-      uviLevel: 5,
-      isActive: true,
-      animal: {
-        name: 'Luna',
-        species: 'Green Tree Python (Morelia viridis)',
-        sex: 'female',
-        dateOfBirth: '2021-08-20',
-        age: '2.5 years',
-        diet: 'Small mammals, birds',
-        activity: 'nocturnal',
-        habitat: 'arboreal',
-        vetAppointments: [
-          {
-            id: '1',
-            date: '2024-04-10',
-            time: '3:00 PM',
-            reason: 'Regular checkup',
-            notes: 'Check for mites and respiratory health',
-            completed: false
-          }
-        ],
-        mealSchedule: [
-          {
-            id: '1',
-            dayOfWeek: 'sunday',
-            time: '20:00',
-            foodType: 'Adult mouse',
-            quantity: '1 item',
-            notes: 'Pre-killed, properly thawed'
-          }
-        ],
-        careRoutine: [
-          {
-            id: '1',
-            task: 'Mist enclosure',
-            frequency: 'daily',
-            lastPerformed: '2024-02-28',
-            notes: 'Maintain humidity levels'
-          },
-          {
-            id: '2',
-            task: 'Check temperature gradient',
-            frequency: 'daily',
-            lastPerformed: '2024-02-28'
-          },
-          {
-            id: '3',
-            task: 'Clean water bowl',
-            frequency: 'weekly',
-            lastPerformed: '2024-02-25',
-            nextDue: '2024-03-03'
-          }
-        ]
-      }
-    },
-    {
-      id: 3,
-      name: 'Paludarium',
-      type: 'paludarium',
-      image: '/images/paludarium.jpg',
-      temperature: 25,
-      humidity: 90,
-      lightLevel: 65,
-      uviLevel: 4,
-      isActive: false,
-      animal: {
-        name: 'Neptune',
-        species: 'Fire-Bellied Toad (Bombina orientalis)',
-        sex: 'male',
-        dateOfBirth: '2023-01-10',
-        age: '1 year',
-        diet: 'Insects, small invertebrates',
-        activity: 'diurnal',
-        habitat: 'aquatic',
-        vetAppointments: [
-          {
-            id: '1',
-            date: '2024-03-20',
-            time: '11:30 AM',
-            reason: 'Health assessment',
-            notes: 'Check skin condition',
-            completed: false
-          }
-        ],
-        mealSchedule: [
-          {
-            id: '1',
-            dayOfWeek: 'tuesday',
-            time: '10:00',
-            foodType: 'Crickets',
-            quantity: '4-5 small crickets',
-            notes: 'Dust with calcium'
-          },
-          {
-            id: '2',
-            dayOfWeek: 'friday',
-            time: '10:00',
-            foodType: 'Fruit flies',
-            quantity: '10-15 flies',
-            notes: 'Gut-loaded'
-          }
-        ],
-        careRoutine: [
-          {
-            id: '1',
-            task: 'Water quality check',
-            frequency: 'daily',
-            lastPerformed: '2024-02-28'
-          },
-          {
-            id: '2',
-            task: 'Partial water change',
-            frequency: 'weekly',
-            lastPerformed: '2024-02-25',
-            nextDue: '2024-03-03',
-            notes: '25% water change'
-          }
-        ]
-      }
-    },
-    {
-      id: 4,
-      name: 'Vivarium',
-      type: 'vivarium',
-      image: '/images/vivarium.jpg',
-      temperature: 24,
-      humidity: 80,
-      lightLevel: 75,
-      uviLevel: 6,
-      isActive: true,
-      animal: {
-        name: 'Jade',
-        species: 'Red-Eyed Tree Frog (Agalychnis callidryas)',
-        sex: 'female',
-        dateOfBirth: '2023-03-15',
-        age: '9 months',
-        diet: 'Crickets, flies, moths',
-        activity: 'nocturnal',
-        habitat: 'arboreal',
-        vetAppointments: [
-          {
-            id: '1',
-            date: '2024-03-25',
-            time: '2:00 PM',
-            reason: 'Regular checkup',
-            notes: 'Monitor growth rate',
-            completed: false
-          }
-        ],
-        mealSchedule: [
-          {
-            id: '1',
-            dayOfWeek: 'monday',
-            time: '19:00',
-            foodType: 'Crickets',
-            quantity: '3-4 crickets',
-            notes: 'Small to medium size'
-          },
-          {
-            id: '2',
-            dayOfWeek: 'thursday',
-            time: '19:00',
-            foodType: 'Moths',
-            quantity: '2-3 moths',
-            notes: 'Captive bred only'
-          }
-        ],
-        careRoutine: [
-          {
-            id: '1',
-            task: 'Mist enclosure',
-            frequency: 'daily',
-            lastPerformed: '2024-02-28',
-            notes: 'Morning and evening'
-          },
-          {
-            id: '2',
-            task: 'Check plants',
-            frequency: 'weekly',
-            lastPerformed: '2024-02-25',
-            nextDue: '2024-03-03',
-            notes: 'Trim if needed'
-          }
-        ]
-      }
-    },
-    {
-      id: 5,
-      name: 'Incubator',
-      type: 'incubator',
-      image: '/images/incubator.jpg',
-      temperature: 30,
-      humidity: 85,
-      lightLevel: 0,
-      uviLevel: 0,
-      isActive: true
-    },
-    {
-      id: 6,
-      name: 'Aquarium',
-      type: 'aquarium',
-      image: 'https://images.unsplash.com/photo-1534043464124-3be32fe000c9?auto=format&fit=crop&q=80',
-      temperature: 25,
-      humidity: 100,
-      lightLevel: 60,
-      uviLevel: 3,
-      isActive: true
-    }
-  ])
-  );
+const App: React.FC = () => {
+  const { isAuthenticated, logout } = useAuth();
+  const queryClient = useQueryClient();
+  const [terrariumForm, setTerrariumForm] = useState<TerrariumInput>({
+    name: '',
+    type: 'custom',
+    description: '',
+    isActive: true,
+    temperature: 28,
+    humidity: 60,
+    lightLevel: 70,
+    uviLevel: 6
+  });
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const wifiStatus = useWifiStatus();
+  const wifiNetworks = useWifiNetworks(wifiStatus.data?.enabled ?? false);
+  const toggleWifiMutation = useToggleWifi();
 
-  // Sauvegarder l'ordre des terrariums
-  useEffect(() => {
-    saveToLocalStorage('terrariumOrder', terrariums);
-  }, [terrariums]);
+  const bluetoothStatus = useBluetoothStatus();
+  const bluetoothDevices = useBluetoothDevices();
+  const toggleBluetoothMutation = useToggleBluetooth();
 
-  // Sauvegarder les préférences de vue
-  useEffect(() => {
-    saveToLocalStorage('viewMode', viewMode);
-  }, [viewMode]);
+  const sensors = useSensors();
+  const systemInfo = useSystemInfo();
+  const terrariums = useTerrariums();
+  const createTerrarium = useCreateTerrarium();
+  const deleteTerrarium = useDeleteTerrarium();
 
-  useEffect(() => {
-    saveToLocalStorage('showAll', showAll);
-  }, [showAll]);
-
-  const handleClickOutside = () => {
-    setWifiPopupOpen(false);
-    setBluetoothPopupOpen(false);
-    setSettingsPopupOpen(false);
-    setGeneralSettingsOpen(false);
-    setSelectedTerrarium(null);
-    setInfoPopupOpen(null);
-    setAccountMenuOpen(false);
+  const handleWifiToggle = async () => {
+    if (!wifiStatus.data) return;
+    await toggleWifiMutation.mutateAsync(!wifiStatus.data.enabled);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['wifi', 'status'] }),
+      queryClient.invalidateQueries({ queryKey: ['wifi', 'networks'] })
+    ]);
   };
 
-  const handleSettingsClick = (e: React.MouseEvent, terrarium: AquariumType) => {
-    e.stopPropagation();
-
-    const isSameTerrarium = selectedTerrarium?.id === terrarium.id;
-
-    if (isSameTerrarium) {
-      setSettingsPopupOpen(false);
-      setSelectedTerrarium(null);
-      return;
-    }
-
-    setSelectedTerrarium(terrarium);
-    setSettingsPopupOpen(true);
+  const handleBluetoothToggle = async () => {
+    if (!bluetoothStatus.data) return;
+    await toggleBluetoothMutation.mutateAsync(!bluetoothStatus.data.powered);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['bluetooth', 'status'] }),
+      queryClient.invalidateQueries({ queryKey: ['bluetooth', 'devices'] })
+    ]);
   };
 
-  const handleSaveSettings = (id: number, newSettings: Partial<AquariumType>) => {
-    setTerrariums(prev => prev.map(terrarium => 
-      terrarium.id === id ? { ...terrarium, ...newSettings } : terrarium
-    ));
-    setSettingsPopupOpen(false);
-    setSelectedTerrarium(null);
+  const activeSensors = useMemo(() => sensors.data ?? [], [sensors.data]);
+
+  const handleTerrariumSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await createTerrarium.mutateAsync({
+      ...terrariumForm,
+      description: terrariumForm.description?.trim() ? terrariumForm.description : null
+    });
+    setTerrariumForm((prev) => ({ ...prev, name: '', description: '' }));
+    await queryClient.invalidateQueries({ queryKey: ['terrariums'] });
   };
 
-  const toggleTerrarium = (e: React.MouseEvent, id: number) => {
-    e.stopPropagation();
-    setTerrariums(prev => prev.map(terrarium => 
-      terrarium.id === id ? { ...terrarium, isActive: !terrarium.isActive } : terrarium
-    ));
+  const handleTerrariumDelete = async (id: string) => {
+    await deleteTerrarium.mutateAsync(id);
+    await queryClient.invalidateQueries({ queryKey: ['terrariums'] });
   };
 
-  const handleInfoClick = (e: React.MouseEvent, id: number) => {
-    e.stopPropagation();
-    setInfoPopupOpen(prev => prev === id ? null : id);
-  };
+  if (!isAuthenticated) {
+    return <LoginForm />;
+  }
 
-  const handleAvatarUpdate = (newAvatarUrl: string) => {
-    setAvatarUrl(newAvatarUrl);
-  };
-
-  const handleReorderTerrariums = (sourceId: number, targetId: number) => {
-    if (sourceId === targetId) {
-      return;
-    }
-
-    const displayedTerrariums = showAll
-      ? terrariums
-      : terrariums.filter(terrarium => terrarium.isActive);
-
-    const sourceIndexInDisplayed = displayedTerrariums.findIndex(terrarium => terrarium.id === sourceId);
-    const targetIndexInDisplayed = displayedTerrariums.findIndex(terrarium => terrarium.id === targetId);
-
-    if (sourceIndexInDisplayed === -1 || targetIndexInDisplayed === -1) {
-      return;
-    }
-
-    const reorderedDisplayed = [...displayedTerrariums];
-    const [movedTerrarium] = reorderedDisplayed.splice(sourceIndexInDisplayed, 1);
-    reorderedDisplayed.splice(targetIndexInDisplayed, 0, movedTerrarium);
-
-    let newTerrariums: AquariumType[];
-
-    if (showAll) {
-      newTerrariums = reorderedDisplayed;
-    } else {
-      let displayIndex = 0;
-      newTerrariums = terrariums.map(terrarium => {
-        if (!terrarium.isActive) {
-          return terrarium;
-        }
-        const reorderedTerrarium = reorderedDisplayed[displayIndex];
-        displayIndex += 1;
-        return reorderedTerrarium ?? terrarium;
-      });
-    }
-
-    setTerrariums(newTerrariums);
-    saveToLocalStorage('terrariumOrder', newTerrariums);
-  };
-
-  const filteredTerrariums = showAll 
-    ? terrariums 
-    : terrariums.filter(terrarium => terrarium.isActive);
-
-  const getGridClasses = () => {
-    if (viewMode === 'list') {
-      return 'grid grid-cols-1 gap-3 sm:gap-4 lg:gap-6';
-    }
-    return 'grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6';
-  };
   return (
-    <DragDropProvider>
-      <div className="min-h-screen bg-[#0a1119]" onClick={handleClickOutside}>
-        <div className="container-fluid py-3 sm:py-4 lg:py-6">
-          <MobileOptimizedHeader
-            currentTime={currentTime}
-            avatarUrl={avatarUrl}
-            accountMenuOpen={accountMenuOpen}
-            onAccountToggle={(e) => {
-              e.stopPropagation();
-              setAccountMenuOpen(!accountMenuOpen);
-            }}
-            onNetworkClick={() => {}}
-            wifiEnabled={wifiEnabled}
-            onWifiToggle={(e) => {
-              e.stopPropagation();
-              setWifiPopupOpen(!wifiPopupOpen);
-              setBluetoothPopupOpen(false);
-              setGeneralSettingsOpen(false);
-            }}
-            bluetoothEnabled={bluetoothEnabled}
-            onBluetoothToggle={(e) => {
-              e.stopPropagation();
-              setBluetoothPopupOpen(!bluetoothPopupOpen);
-              setWifiPopupOpen(false);
-              setGeneralSettingsOpen(false);
-            }}
-            onGeneralSettingsToggle={(e) => {
-              e.stopPropagation();
-              setGeneralSettingsOpen(!generalSettingsOpen);
-              setWifiPopupOpen(false);
-              setBluetoothPopupOpen(false);
-            }}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            showAll={showAll}
-            onShowAllChange={setShowAll}
-          />
+    <div className="min-h-screen bg-slate-950 text-white">
+      <header className="border-b border-cyan-500/20 bg-slate-900/70 backdrop-blur">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-cyan-400">BPI Control Center</h1>
+            <p className="text-sm text-slate-300">Supervision temps réel de votre Banana Pi F3</p>
+          </div>
+          <button
+            onClick={logout}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm"
+          >
+            <LogOut className="w-4 h-4" />
+            Déconnexion
+          </button>
+        </div>
+      </header>
 
-          <div className={getGridClasses()}>
-            {filteredTerrariums.map((terrarium) => (
-              <div key={terrarium.id}>
-                <TerrariumCard
-                  terrarium={terrarium}
-                  viewMode={viewMode}
-                  onSettingsClick={handleSettingsClick}
-                  onToggle={toggleTerrarium}
-                  onInfoClick={handleInfoClick}
-                  selectedTerrarium={selectedTerrarium}
-                  infoPopupOpen={infoPopupOpen}
-                  onReorder={handleReorderTerrariums}
-                />
-                {terrarium.animal && infoPopupOpen === terrarium.id && (
-                  <AnimalInfoPopup
-                    isOpen={true}
-                    onClose={() => setInfoPopupOpen(null)}
-                    animal={terrarium.animal}
-                  />
-                )}
+      <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+        <section className="grid gap-6 md:grid-cols-2">
+          <div className="bg-slate-900/60 border border-cyan-500/10 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2"><Wifi className="w-5 h-5 text-cyan-400" /> Wi-Fi</h2>
+              <button
+                onClick={handleWifiToggle}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-500/10 hover:bg-cyan-500/20"
+                disabled={toggleWifiMutation.isPending || wifiStatus.isLoading}
+              >
+                <RefreshCcw className={`w-4 h-4 ${toggleWifiMutation.isPending ? 'animate-spin' : ''}`} />
+                {wifiStatus.data?.enabled ? 'Désactiver' : 'Activer'}
+              </button>
+            </div>
+            <p className="text-sm text-slate-300 mb-4">
+              État : {wifiStatus.data?.enabled ? 'activé' : 'désactivé'}
+            </p>
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+              {wifiNetworks.data?.map((network) => (
+                <div key={`${network.ssid}-${network.signal}`} className="flex items-center justify-between bg-slate-800/60 rounded-xl px-4 py-2">
+                  <div>
+                    <p className="font-medium">{network.ssid || 'SSID non diffusé'}</p>
+                    <p className="text-xs text-slate-400">{network.secure ? 'Sécurisé' : 'Ouvert'}</p>
+                  </div>
+                  <span className="text-sm text-cyan-300">{network.signal}%</span>
+                </div>
+              ))}
+              {wifiNetworks.isLoading && <p className="text-sm text-slate-400">Scan des réseaux…</p>}
+            </div>
+          </div>
+
+          <div className="bg-slate-900/60 border border-cyan-500/10 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2"><Bluetooth className="w-5 h-5 text-cyan-400" /> Bluetooth</h2>
+              <button
+                onClick={handleBluetoothToggle}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-500/10 hover:bg-cyan-500/20"
+                disabled={toggleBluetoothMutation.isPending || bluetoothStatus.isLoading}
+              >
+                <RefreshCcw className={`w-4 h-4 ${toggleBluetoothMutation.isPending ? 'animate-spin' : ''}`} />
+                {bluetoothStatus.data?.powered ? 'Désactiver' : 'Activer'}
+              </button>
+            </div>
+            <p className="text-sm text-slate-300 mb-4">
+              État : {bluetoothStatus.data?.powered ? 'activé' : 'désactivé'}
+            </p>
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+              {bluetoothDevices.data?.discovered.map((device) => (
+                <div key={device.id} className="flex items-center justify-between bg-slate-800/60 rounded-xl px-4 py-2">
+                  <div>
+                    <p className="font-medium">{device.name}</p>
+                    <p className="text-xs text-slate-400">{device.id}</p>
+                  </div>
+                  <span className={`text-xs ${device.paired ? 'text-emerald-400' : 'text-slate-400'}`}>
+                    {device.paired ? 'Appairé' : 'Découvert'}
+                  </span>
+                </div>
+              ))}
+              {bluetoothDevices.isLoading && <p className="text-sm text-slate-400">Recherche d'appareils…</p>}
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-2">
+          <div className="bg-slate-900/60 border border-cyan-500/10 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2"><Activity className="w-5 h-5 text-cyan-400" /> Capteurs</h2>
+              <button
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-sm"
+                onClick={() => queryClient.invalidateQueries({ queryKey: ['sensors'] })}
+              >
+                <RefreshCcw className="w-4 h-4" /> Rafraîchir
+              </button>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {activeSensors.map((sensor) => (
+                <div key={`${sensor.sensorType}-${sensor.timestamp}`} className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-4">
+                  <p className="text-sm text-slate-400">{sensor.sensorType}</p>
+                  <p className="text-2xl font-semibold text-cyan-300">{sensor.value} {sensor.unit}</p>
+                  <p className="text-xs text-slate-500 mt-2">
+                    {new Date(sensor.timestamp).toLocaleTimeString()}
+                  </p>
+                </div>
+              ))}
+              {activeSensors.length === 0 && <p className="text-sm text-slate-400">Aucune mesure disponible.</p>}
+            </div>
+          </div>
+
+          <div className="bg-slate-900/60 border border-cyan-500/10 rounded-2xl p-6">
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><Cpu className="w-5 h-5 text-cyan-400" /> Système</h2>
+            {systemInfo.data ? (
+              <div className="space-y-3 text-sm text-slate-300">
+                <p>Kernel : {systemInfo.data.kernel}</p>
+                <p>Uptime : {formatSeconds(systemInfo.data.uptimeSeconds)}</p>
+                <p>CPU : {systemInfo.data.cpuCount} cœurs — charge {systemInfo.data.loadAverage.map((value) => value.toFixed(2)).join(', ')}</p>
+                <p>Mémoire : {systemInfo.data.memory.usedMb} / {systemInfo.data.memory.totalMb} Mo utilisés</p>
+                <p>Température CPU : {systemInfo.data.cpuTemperatureC ? `${systemInfo.data.cpuTemperatureC.toFixed(1)} °C` : 'N/A'}</p>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">Collecte des informations système…</p>
+            )}
+          </div>
+        </section>
+
+        <section className="bg-slate-900/60 border border-cyan-500/10 rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Terrariums</h2>
+            <button
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-sm"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['terrariums'] })}
+            >
+              <RefreshCcw className="w-4 h-4" /> Rafraîchir
+            </button>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            {terrariums.data?.map((terrarium) => (
+              <div key={terrarium.id} className="bg-slate-800/40 border border-slate-700/40 rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-cyan-300">{terrarium.name}</h3>
+                  <button
+                    onClick={() => handleTerrariumDelete(terrarium.id)}
+                    className="text-xs text-red-400 hover:text-red-300"
+                  >
+                    Supprimer
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400">{terrarium.type}</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="flex items-center gap-2"><Thermometer className="w-4 h-4 text-cyan-400" /> {terrarium.temperature}°C</div>
+                  <div className="flex items-center gap-2"><Droplet className="w-4 h-4 text-cyan-400" /> {terrarium.humidity}%</div>
+                  <div className="flex items-center gap-2"><Sun className="w-4 h-4 text-cyan-400" /> {terrarium.lightLevel}%</div>
+                  <div className="flex items-center gap-2"><Activity className="w-4 h-4 text-cyan-400" /> UVI {terrarium.uviLevel}</div>
+                </div>
+                <p className={`text-xs ${terrarium.isActive ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  {terrarium.isActive ? 'Actif' : 'Arrêté'}
+                </p>
               </div>
             ))}
+            {terrariums.isLoading && <p className="text-sm text-slate-400">Chargement des terrariums…</p>}
           </div>
-        </div>
 
-        {/* Popups */}
-        <WifiPopup
-          isOpen={wifiPopupOpen}
-          onClose={() => setWifiPopupOpen(false)}
-          isEnabled={wifiEnabled}
-          onToggle={() => setWifiEnabled(!wifiEnabled)}
-        />
-        
-        <BluetoothPopup
-          isOpen={bluetoothPopupOpen}
-          onClose={() => setBluetoothPopupOpen(false)}
-          isEnabled={bluetoothEnabled}
-          onToggle={() => setBluetoothEnabled(!bluetoothEnabled)}
-        />
-        
-        <GeneralSettingsPopup
-          isOpen={generalSettingsOpen}
-          onClose={() => setGeneralSettingsOpen(false)}
-          onAvatarUpdate={handleAvatarUpdate}
-        />
-
-        {selectedTerrarium && (
-          <TerrariumSettingsPopup
-            isOpen={settingsPopupOpen}
-            onClose={() => {
-              setSettingsPopupOpen(false);
-              setSelectedTerrarium(null);
-            }}
-            terrarium={selectedTerrarium}
-            onSave={handleSaveSettings}
-          />
-        )}
-      </div>
-    </DragDropProvider>
+          <form onSubmit={handleTerrariumSubmit} className="grid md:grid-cols-3 gap-4">
+            <input
+              className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2"
+              placeholder="Nom"
+              value={terrariumForm.name}
+              onChange={(event) => setTerrariumForm((prev) => ({ ...prev, name: event.target.value }))}
+              required
+            />
+            <input
+              className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2"
+              placeholder="Type"
+              value={terrariumForm.type}
+              onChange={(event) => setTerrariumForm((prev) => ({ ...prev, type: event.target.value }))}
+              required
+            />
+            <input
+              className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2"
+              placeholder="Description"
+              value={terrariumForm.description ?? ''}
+              onChange={(event) => setTerrariumForm((prev) => ({ ...prev, description: event.target.value }))}
+            />
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              Température
+              <input
+                type="number"
+                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 w-full"
+                value={terrariumForm.temperature}
+                onChange={(event) => setTerrariumForm((prev) => ({ ...prev, temperature: Number(event.target.value) }))}
+                required
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              Humidité
+              <input
+                type="number"
+                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 w-full"
+                value={terrariumForm.humidity}
+                onChange={(event) => setTerrariumForm((prev) => ({ ...prev, humidity: Number(event.target.value) }))}
+                required
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              Lumière
+              <input
+                type="number"
+                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 w-full"
+                value={terrariumForm.lightLevel}
+                onChange={(event) => setTerrariumForm((prev) => ({ ...prev, lightLevel: Number(event.target.value) }))}
+                required
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              UVI
+              <input
+                type="number"
+                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 w-full"
+                value={terrariumForm.uviLevel}
+                onChange={(event) => setTerrariumForm((prev) => ({ ...prev, uviLevel: Number(event.target.value) }))}
+                required
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              Actif
+              <input
+                type="checkbox"
+                checked={terrariumForm.isActive}
+                onChange={(event) => setTerrariumForm((prev) => ({ ...prev, isActive: event.target.checked }))}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={createTerrarium.isPending}
+              className="md:col-span-3 bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-semibold rounded-lg py-2"
+            >
+              {createTerrarium.isPending ? 'Enregistrement…' : 'Ajouter un terrarium'}
+            </button>
+          </form>
+        </section>
+      </main>
+    </div>
   );
-}
+};
 
 export default App;
