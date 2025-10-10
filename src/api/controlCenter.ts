@@ -47,6 +47,11 @@ export interface SystemInfo {
 }
 
 export interface SensorValue {
+  sensorType: 'TEMPERATURE' | 'HUMIDITY' | 'LIGHT' | 'UV' | 'RELAY';
+  value: number;
+  unit: string;
+  timestamp: string;
+  label?: string;
   sensorType: 'TEMPERATURE' | 'HUMIDITY' | 'LIGHT' | 'UV';
   value: number;
   unit: string;

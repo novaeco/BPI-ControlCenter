@@ -38,6 +38,7 @@ cd BPI-ControlCenter
 # Configuration des variables d’environnement
 cp .env.example .env
 # Éditez .env pour définir les secrets JWT et l’URL de la base (sqlite par défaut)
+# - `GPIO_RELAY_PINS` accepte un tableau JSON (ex. `[17, 18]`) pour activer la gestion des relais/LED via GPIO
 
 # Installation des dépendances
 npm install
@@ -101,6 +102,7 @@ La documentation OpenAPI est disponible dans `server/openapi.yaml`. Principaux e
 - `GET/POST /api/wifi/*` – État, activation et scan Wi‑Fi via `nmcli`.
 - `GET/POST /api/bluetooth/*` – Gestion Bluetooth via `bluetoothctl`.
 - `GET /api/system/info` – Informations noyau, charge CPU, mémoire, disques, température.
+- `GET /api/sensors` – Lecture capteurs BME280 (température/humidité), BH1750 (luminosité) et états des relais GPIO (via onoff) + fallback DB.
 - `GET /api/sensors` – Lecture capteurs BME280 (température/humidité) et BH1750 (luminosité) + fallback DB.
 - `CRUD /api/terrariums` – Gestion des enclos, mesures, statut.
 - `GET/POST /api/settings` – Préférences globales.

@@ -430,11 +430,19 @@ components:
       properties:
         sensorType:
           type: string
+          enum: [TEMPERATURE, HUMIDITY, LIGHT, UV, RELAY]
           enum: [TEMPERATURE, HUMIDITY, LIGHT, UV]
         value:
           type: number
         unit:
           type: string
+          description: "Unité de mesure ou 'state' pour les relais GPIO"
+        timestamp:
+          type: string
+          format: date-time
+        label:
+          type: string
+          description: Libellé lisible pour identifier le capteur ou le relais
         timestamp:
           type: string
           format: date-time

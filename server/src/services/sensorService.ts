@@ -4,11 +4,14 @@ import Bme280 from 'bme280-sensor';
 import { env } from '../config/env';
 import { prisma } from './prisma';
 import { logger } from '../utils/logger';
+import { readRelayStates } from './gpioService';
 
 export const SENSOR_TYPES = {
   TEMPERATURE: 'TEMPERATURE',
   HUMIDITY: 'HUMIDITY',
   LIGHT: 'LIGHT',
+  UV: 'UV',
+  RELAY: 'RELAY'
   UV: 'UV'
 } as const;
 
@@ -19,6 +22,7 @@ export interface SensorValueDto {
   value: number;
   unit: string;
   timestamp: string;
+  label?: string;
 }
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -94,6 +98,19 @@ export const readSensors = async (): Promise<SensorValueDto[]> => {
     ...(await hardware.readTemperatureHumidity()),
     ...(await hardware.readLight())
   ];
+
+  const relayStates = await readRelayStates();
+  if (relayStates.length > 0) {
+    readings.push(
+      ...relayStates.map((relay) => ({
+        sensorType: SENSOR_TYPES.RELAY,
+        value: relay.value,
+        unit: 'state',
+        timestamp,
+        label: `Relais GPIO${relay.pin}`
+      }))
+    );
+  }
 
   if (hardwareValues.length > 0) {
     await Promise.all(
