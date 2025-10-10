@@ -381,8 +381,17 @@ function App() {
 
   const handleSettingsClick = (e: React.MouseEvent, terrarium: AquariumType) => {
     e.stopPropagation();
-    setSelectedTerrarium(prev => prev?.id === terrarium.id ? null : terrarium);
-    setSettingsPopupOpen(prev => !prev);
+
+    const isSameTerrarium = selectedTerrarium?.id === terrarium.id;
+
+    if (isSameTerrarium) {
+      setSettingsPopupOpen(false);
+      setSelectedTerrarium(null);
+      return;
+    }
+
+    setSelectedTerrarium(terrarium);
+    setSettingsPopupOpen(true);
   };
 
   const handleSaveSettings = (id: number, newSettings: Partial<AquariumType>) => {
