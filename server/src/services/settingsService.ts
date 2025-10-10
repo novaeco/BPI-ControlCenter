@@ -1,4 +1,4 @@
-import { prisma } from './prisma';
+import { Setting } from '../models';
 
 export type SettingResponse = {
   key: string;
@@ -23,24 +23,33 @@ const parseValue = (value: string): unknown => {
 };
 
 export const getSettings = async (): Promise<SettingResponse[]> => {
-  const settings = await prisma.setting.findMany({ orderBy: { key: 'asc' } });
-  return settings.map((setting) => ({
-    key: setting.key,
-    value: parseValue(setting.value),
-    updatedAt: setting.updatedAt.toISOString()
-  }));
+  const settings = await Setting.findAll({ order: [['key', 'ASC']] });
+  return settings.map((setting) => {
+    const plain = setting.get({ plain: true });
+    return {
+      key: plain.key,
+      value: parseValue(plain.value),
+      updatedAt: (plain.updatedAt ?? plain.createdAt ?? new Date()).toISOString()
+    };
+  });
 };
 
 export const upsertSetting = async (key: string, value: unknown): Promise<SettingResponse> => {
   const serialised = serializeValue(value);
-  const setting = await prisma.setting.upsert({
+  const [setting, created] = await Setting.findOrCreate({
     where: { key },
-    update: { value: serialised },
-    create: { key, value: serialised }
+    defaults: { key, value: serialised }
   });
+
+  if (!created) {
+    setting.value = serialised;
+    await setting.save();
+  }
+
+  const plain = setting.get({ plain: true });
   return {
-    key: setting.key,
-    value: parseValue(setting.value),
-    updatedAt: setting.updatedAt.toISOString()
+    key: plain.key,
+    value: parseValue(plain.value),
+    updatedAt: (plain.updatedAt ?? plain.createdAt ?? new Date()).toISOString()
   };
 };

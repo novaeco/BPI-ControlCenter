@@ -6,7 +6,7 @@ config();
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(4000),
-  DATABASE_URL: z.string().min(1),
+  DB_PATH: z.string().min(1).default('./data/database.sqlite'),
   JWT_ACCESS_SECRET: z.string().min(10),
   JWT_REFRESH_SECRET: z.string().min(10),
   BME280_I2C_ADDRESS: z
