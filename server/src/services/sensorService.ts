@@ -12,6 +12,7 @@ export const SENSOR_TYPES = {
   LIGHT: 'LIGHT',
   UV: 'UV',
   RELAY: 'RELAY'
+  UV: 'UV'
 } as const;
 
 export type SensorType = (typeof SENSOR_TYPES)[keyof typeof SENSOR_TYPES];

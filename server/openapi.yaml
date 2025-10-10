@@ -431,6 +431,7 @@ components:
         sensorType:
           type: string
           enum: [TEMPERATURE, HUMIDITY, LIGHT, UV, RELAY]
+          enum: [TEMPERATURE, HUMIDITY, LIGHT, UV]
         value:
           type: number
         unit:
@@ -442,6 +443,9 @@ components:
         label:
           type: string
           description: Libellé lisible pour identifier le capteur ou le relais
+        timestamp:
+          type: string
+          format: date-time
     Terrarium:
       type: object
       properties:
