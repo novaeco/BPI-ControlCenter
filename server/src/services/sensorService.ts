@@ -1,62 +1,119 @@
-import type { PromisifiedBus } from 'i2c-bus';
-import { openPromisified } from 'i2c-bus';
-import Bme280 from 'bme280-sensor';
 import { env } from '../config/env';
 import { SensorReading } from '../models';
 import { logger } from '../utils/logger';
 import { readRelayStates } from './gpioService';
 import { SENSOR_TYPES, SensorType, type SensorValueDto } from '../../../shared/sensors';
+import { i2cReadByte, i2cReadByteDirect, i2cReadBytes, i2cSendByte, i2cWriteByte } from '../lib/hardware';
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-class SensorHardware {
-  private bus: PromisifiedBus | null = null;
-  private bme280: Bme280 | null = null;
+interface Bme280Calibration {
+  digT1: number;
+  digT2: number;
+  digT3: number;
+  digH1: number;
+  digH2: number;
+  digH3: number;
+  digH4: number;
+  digH5: number;
+  digH6: number;
+}
 
-  private async getBus(): Promise<PromisifiedBus> {
-    if (!this.bus) {
-      this.bus = await openPromisified(1);
-    }
-    return this.bus;
-  }
+class Bme280Driver {
+  private calibration: Bme280Calibration | null = null;
+
+  constructor(private readonly address: number, private readonly bus: number) {}
 
   public async init(): Promise<void> {
     try {
-      this.bme280 = new Bme280({ i2cAddress: env.BME280_I2C_ADDRESS });
-      await this.bme280.init();
-      logger.info('BME280 initialisé');
+      await i2cWriteByte(this.address, 0xe0, 0xb6, { bus: this.bus });
+      await delay(10);
+      this.calibration = await this.loadCalibration();
+      await i2cWriteByte(this.address, 0xf2, 0x01, { bus: this.bus });
+      await i2cWriteByte(this.address, 0xf4, 0x27, { bus: this.bus });
+      await i2cWriteByte(this.address, 0xf5, 0xa0, { bus: this.bus });
+      logger.info('BME280 initialisé via i2c-tools');
     } catch (error) {
-      logger.warn({ err: error }, "Impossible d'initialiser le BME280. Lecture logicielle uniquement.");
-      this.bme280 = null;
+      this.calibration = null;
+      logger.warn({ err: error }, "Impossible d'initialiser le BME280.");
     }
   }
 
-  public async readTemperatureHumidity(): Promise<Array<{ type: SensorType; value: number; unit: string }>> {
-    if (!this.bme280) {
+  private async loadCalibration(): Promise<Bme280Calibration> {
+    const buf1 = await i2cReadBytes(this.address, 0x88, 24, { bus: this.bus });
+    const h1 = await i2cReadByte(this.address, 0xa1, { bus: this.bus });
+    const buf2 = await i2cReadBytes(this.address, 0xe1, 7, { bus: this.bus });
+
+    const u16 = (buffer: Uint8Array, offset: number): number => buffer[offset] | (buffer[offset + 1] << 8);
+    const s16 = (buffer: Uint8Array, offset: number): number => {
+      const value = u16(buffer, offset);
+      return value > 0x7fff ? value - 0x10000 : value;
+    };
+
+    const digH4 = (buf2[3] << 4) | (buf2[4] & 0x0f);
+    const digH5 = (buf2[5] << 4) | (buf2[4] >> 4);
+
+    return {
+      digT1: u16(buf1, 0),
+      digT2: s16(buf1, 2),
+      digT3: s16(buf1, 4),
+      digH1: h1,
+      digH2: s16(buf2, 0),
+      digH3: buf2[2],
+      digH4: digH4 > 0x7ff ? digH4 - 0x1000 : digH4,
+      digH5: digH5 > 0x7ff ? digH5 - 0x1000 : digH5,
+      digH6: buf2[6] > 0x7f ? buf2[6] - 0x100 : buf2[6]
+    };
+  }
+
+  public async read(): Promise<Array<{ type: SensorType; value: number; unit: string }>> {
+    if (!this.calibration) {
       return [];
     }
+
     try {
-      const data = await this.bme280.readSensorData();
+      await i2cWriteByte(this.address, 0xf4, 0x27, { bus: this.bus });
+      await delay(100);
+      const data = await i2cReadBytes(this.address, 0xf7, 8, { bus: this.bus });
+
+      const rawTemp = (data[3] << 12) | (data[4] << 4) | (data[5] >> 4);
+      const rawHum = (data[6] << 8) | data[7];
+
+      const cal = this.calibration;
+      const var1 = (rawTemp / 16384 - cal.digT1 / 1024) * cal.digT2;
+      const var2 = ((rawTemp / 131072 - cal.digT1 / 8192) * (rawTemp / 131072 - cal.digT1 / 8192)) * cal.digT3;
+      const tFine = var1 + var2;
+      const temperature = Number(((tFine / 5120)).toFixed(2));
+
+      let varH = tFine - 76800;
+      varH = (rawHum - (cal.digH4 * 64 + (cal.digH5 / 16384) * varH)) * (cal.digH2 / 65536);
+      varH =
+        varH *
+        (1 + (cal.digH3 / 67108864) * varH * (1 + (cal.digH6 / 67108864) * varH));
+      const humidity = Math.max(0, Math.min(100, varH));
+
       return [
-        { type: SENSOR_TYPES.TEMPERATURE, value: Number(data.temperature_C.toFixed(2)), unit: '°C' },
-        { type: SENSOR_TYPES.HUMIDITY, value: Number(data.humidity.toFixed(2)), unit: '%' }
+        { type: SENSOR_TYPES.TEMPERATURE, value: temperature, unit: '°C' },
+        { type: SENSOR_TYPES.HUMIDITY, value: Number(humidity.toFixed(2)), unit: '%' }
       ];
     } catch (error) {
       logger.error({ err: error }, 'Lecture BME280 échouée');
       return [];
     }
   }
+}
 
-  public async readLight(): Promise<Array<{ type: SensorType; value: number; unit: string }>> {
+class Bh1750Driver {
+  constructor(private readonly address: number, private readonly bus: number) {}
+
+  public async read(): Promise<Array<{ type: SensorType; value: number; unit: string }>> {
     try {
-      const bus = await this.getBus();
-      const address = env.BH1750_I2C_ADDRESS;
-      const buffer = Buffer.alloc(2);
-      await bus.i2cWrite(address, 1, Buffer.from([0x01])); // power on
-      await bus.i2cWrite(address, 1, Buffer.from([0x10])); // continuous high-res mode
+      await i2cSendByte(this.address, 0x01, { bus: this.bus });
+      await i2cSendByte(this.address, 0x10, { bus: this.bus });
       await delay(180);
-      await bus.i2cRead(address, 2, buffer);
-      const raw = (buffer[0] << 8) | buffer[1];
+      const high = await i2cReadByteDirect(this.address, { bus: this.bus });
+      const low = await i2cReadByteDirect(this.address, { bus: this.bus });
+      const raw = (high << 8) | low;
       if (raw === 0xffff) {
         throw new Error('BH1750 valeur saturée');
       }
@@ -66,6 +123,24 @@ class SensorHardware {
       logger.warn({ err: error }, 'Lecture BH1750 échouée');
       return [];
     }
+  }
+}
+
+class SensorHardware {
+  private readonly bme280 = new Bme280Driver(env.BME280_I2C_ADDRESS, env.I2C_BUS);
+
+  private readonly bh1750 = new Bh1750Driver(env.BH1750_I2C_ADDRESS, env.I2C_BUS);
+
+  public async init(): Promise<void> {
+    await this.bme280.init();
+  }
+
+  public async readTemperatureHumidity(): Promise<Array<{ type: SensorType; value: number; unit: string }>> {
+    return this.bme280.read();
+  }
+
+  public async readLight(): Promise<Array<{ type: SensorType; value: number; unit: string }>> {
+    return this.bh1750.read();
   }
 }
 

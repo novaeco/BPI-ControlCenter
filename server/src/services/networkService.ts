@@ -1,4 +1,4 @@
-import { runCommand } from '../utils/command';
+import { CommandExecutionError, runCommand } from '../utils/command';
 import { HttpError } from '../middleware/errorHandler';
 
 export interface WifiNetwork {
@@ -37,6 +37,28 @@ export const scanWifiNetworks = async (): Promise<WifiNetwork[]> => {
       const secure = securityRaw !== undefined && securityRaw !== '' && securityRaw !== '--';
       return { ssid, signal, secure } satisfies WifiNetwork;
     });
+};
+
+export const connectWifiNetwork = async (ssid: string, password?: string): Promise<{ connected: boolean; ssid: string }> => {
+  if (!ssid || ssid.trim().length === 0) {
+    throw new HttpError(400, 'Le SSID est requis.');
+  }
+
+  const args = ['device', 'wifi', 'connect', ssid];
+  if (password && password.length > 0) {
+    args.push('password', password);
+  }
+
+  try {
+    await runCommand('nmcli', args, { timeoutMs: 30_000 });
+    return { connected: true, ssid };
+  } catch (error) {
+    if (error instanceof CommandExecutionError) {
+      const detail = error.stderr || error.stdout || 'Connexion Wi-Fi impossible.';
+      throw new HttpError(502, detail);
+    }
+    throw error;
+  }
 };
 
 type BluetoothDevice = {

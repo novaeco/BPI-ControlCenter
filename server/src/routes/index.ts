@@ -3,6 +3,7 @@ import {
   wifiStatus,
   wifiToggle,
   wifiNetworks,
+  wifiConnect,
   bluetoothStatus,
   bluetoothToggle,
   bluetoothDevices
@@ -29,6 +30,7 @@ apiRouter.post('/auth/refresh', asyncHandler(refreshHandler));
 apiRouter.get('/wifi/status', authenticate, asyncHandler(wifiStatus));
 apiRouter.post('/wifi/toggle', authenticate, asyncHandler(wifiToggle));
 apiRouter.get('/wifi/networks', authenticate, asyncHandler(wifiNetworks));
+apiRouter.post('/wifi/connect', authenticate, asyncHandler(wifiConnect));
 
 apiRouter.get('/bluetooth/status', authenticate, asyncHandler(bluetoothStatus));
 apiRouter.post('/bluetooth/toggle', authenticate, asyncHandler(bluetoothToggle));

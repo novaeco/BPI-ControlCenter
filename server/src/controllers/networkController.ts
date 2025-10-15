@@ -1,5 +1,13 @@
 import { Request, Response } from 'express';
-import { getWifiStatus, toggleWifi, scanWifiNetworks, getBluetoothStatus, toggleBluetooth, listBluetoothDevices } from '../services/networkService';
+import {
+  getWifiStatus,
+  toggleWifi,
+  scanWifiNetworks,
+  connectWifiNetwork,
+  getBluetoothStatus,
+  toggleBluetooth,
+  listBluetoothDevices
+} from '../services/networkService';
 
 export const wifiStatus = async (_req: Request, res: Response): Promise<void> => {
   const status = await getWifiStatus();
@@ -15,6 +23,13 @@ export const wifiToggle = async (req: Request, res: Response): Promise<void> => 
 export const wifiNetworks = async (_req: Request, res: Response): Promise<void> => {
   const networks = await scanWifiNetworks();
   res.json(networks);
+};
+
+export const wifiConnect = async (req: Request, res: Response): Promise<void> => {
+  const ssid = String(req.body?.ssid ?? '').trim();
+  const password = typeof req.body?.password === 'string' ? req.body.password : undefined;
+  const result = await connectWifiNetwork(ssid, password);
+  res.json(result);
 };
 
 export const bluetoothStatus = async (_req: Request, res: Response): Promise<void> => {

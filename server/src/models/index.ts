@@ -1,29 +1,80 @@
 import path from 'path';
-import { mkdirSync } from 'fs';
 import {
   Sequelize,
   DataTypes,
   Model,
   Optional,
   Association,
-  NonAttribute
+  NonAttribute,
+  type Options as SequelizeOptions
 } from 'sequelize';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
-const resolveStoragePath = (dbPath: string): string => {
-  const absolute = path.isAbsolute(dbPath) ? dbPath : path.resolve(process.cwd(), dbPath);
-  mkdirSync(path.dirname(absolute), { recursive: true });
-  return absolute;
+const resolveLogging = (): SequelizeOptions['logging'] =>
+  env.NODE_ENV === 'production' ? false : (message: string) => logger.debug(message);
+
+const createPostgresOptions = async (): Promise<SequelizeOptions> => {
+  const options: SequelizeOptions = {
+    dialect: 'postgres',
+    host: env.PG_HOST,
+    port: env.PG_PORT,
+    username: env.PG_USER,
+    password: env.PG_PASSWORD,
+    database: env.PG_DATABASE,
+    logging: resolveLogging(),
+    pool: {
+      max: 5,
+      min: 0,
+      idle: 10_000,
+      acquire: 60_000
+    }
+  };
+
+  if (env.PG_SSL) {
+    options.dialectOptions = {
+      ssl: {
+        require: true,
+        rejectUnauthorized: env.PG_SSL_REJECT_UNAUTHORIZED
+      }
+    };
+  }
+
+  if (env.PG_IN_MEMORY) {
+    const { newDb } = await import('pg-mem');
+    const inMemoryDb = newDb({ autoCreateForeignKeyIndices: true });
+    const adapter = inMemoryDb.adapters.createPg();
+    options.dialectModule = adapter as unknown as SequelizeOptions['dialectModule'];
+    options.host = '127.0.0.1';
+    options.port = 5432;
+    options.username = 'pgmem';
+    options.password = 'pgmem';
+    options.database = 'pgmem';
+  }
+
+  return options;
 };
 
-const storagePath = resolveStoragePath(env.DB_PATH);
+const createSqlJsOptions = async (): Promise<SequelizeOptions> => {
+  const { default: sqljsDialect } = await import('../lib/sqljsSqlite.js');
+  const persistence = env.SQLJS_PERSISTENCE_PATH
+    ? path.resolve(env.SQLJS_PERSISTENCE_PATH)
+    : path.resolve(process.cwd(), 'data/database.sqlite');
 
-export const sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: storagePath,
-  logging: env.NODE_ENV === 'production' ? false : (message) => logger.debug(message)
-});
+  return {
+    dialect: 'sqlite',
+    storage: persistence,
+    dialectModule: sqljsDialect,
+    logging: resolveLogging()
+  } satisfies SequelizeOptions;
+};
+
+const createSequelize = async (): Promise<Sequelize> => {
+  const options = env.DB_ENGINE === 'sqljs' ? await createSqlJsOptions() : await createPostgresOptions();
+  return new Sequelize(options);
+};
+
+export const sequelize = await createSequelize();
 
 export interface UserAttributes {
   id: string;
@@ -355,5 +406,13 @@ SensorReading.belongsTo(Terrarium, { foreignKey: 'terrariumId', as: 'terrarium' 
 export const initDatabase = async (): Promise<void> => {
   await sequelize.authenticate();
   await sequelize.sync({ alter: true });
-  logger.info({ storagePath }, 'Base de données synchronisée');
+  logger.info(
+    {
+      dialect: sequelize.getDialect(),
+      engine: env.DB_ENGINE,
+      host: sequelize.config.host,
+      database: sequelize.getDatabaseName()
+    },
+    'Base de données synchronisée'
+  );
 };

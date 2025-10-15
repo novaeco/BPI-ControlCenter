@@ -1,5 +1,5 @@
 import { createServer } from 'http';
-import { createApp } from './app';
+import { createApp } from './app.js';
 import { env } from './config/env';
 import { initDatabase } from './models';
 import { logger } from './utils/logger';

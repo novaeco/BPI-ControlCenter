@@ -10,6 +10,7 @@ vi.mock('../src/services/networkService', () => ({
   getWifiStatus: vi.fn().mockResolvedValue({ enabled: true }),
   toggleWifi: vi.fn().mockResolvedValue({ enabled: false }),
   scanWifiNetworks: vi.fn().mockResolvedValue([{ ssid: 'test', signal: 70, secure: true }]),
+  connectWifiNetwork: vi.fn().mockResolvedValue({ connected: true, ssid: 'test' }),
   getBluetoothStatus: vi.fn().mockResolvedValue({ powered: true }),
   toggleBluetooth: vi.fn().mockResolvedValue({ powered: false }),
   listBluetoothDevices: vi
@@ -62,6 +63,12 @@ describe('API routes', () => {
     const response = await request(app).post('/api/wifi/toggle').send({ enabled: false });
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ enabled: false });
+  });
+
+  it('connects to wifi', async () => {
+    const response = await request(app).post('/api/wifi/connect').send({ ssid: 'test', password: 'secret' });
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ connected: true, ssid: 'test' });
   });
 
   it('returns system info', async () => {
