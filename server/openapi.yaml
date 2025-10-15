@@ -118,6 +118,41 @@ paths:
                   $ref: '#/components/schemas/WifiNetwork'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /wifi/connect:
+    post:
+      summary: Se connecter à un réseau Wi-Fi
+      tags: [WiFi]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ssid]
+              properties:
+                ssid:
+                  type: string
+                password:
+                  type: string
+                  description: Mot de passe WPA/WPA2 (facultatif pour les réseaux ouverts)
+      responses:
+        '200':
+          description: Connexion réussie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connected:
+                    type: boolean
+                  ssid:
+                    type: string
+        '400':
+          description: Requête invalide
+        '502':
+          description: Erreur renvoyée par NetworkManager
   /bluetooth/status:
     get:
       summary: Obtenir l'état du Bluetooth

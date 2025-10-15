@@ -1,6 +1,6 @@
-import { Gpio } from 'onoff';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
+import { readGpioLine, writeGpioLine } from '../lib/hardware';
 
 export interface RelayState {
   pin: number;
@@ -8,73 +8,37 @@ export interface RelayState {
 }
 
 class RelayManager {
-  private readonly relays = new Map<number, Gpio>();
+  private readonly pins = new Set<number>(env.GPIO_RELAY_PINS);
 
-  private readonly accessible: boolean;
-
-  constructor() {
-    this.accessible = typeof Gpio !== 'undefined' && Gpio.accessible;
-
-    if (!this.accessible) {
-      logger.warn('GPIO non accessibles sur cette plateforme. Gestion des relais désactivée.');
-      return;
-    }
-
-    const cleanup = () => {
-      for (const gpio of this.relays.values()) {
-        try {
-          gpio.unexport();
-        } catch (error) {
-          logger.error({ err: error }, 'Impossible de libérer un GPIO.');
-        }
-      }
-      this.relays.clear();
-    };
-
-    process.once('SIGINT', cleanup);
-    process.once('SIGTERM', cleanup);
-    process.once('exit', cleanup);
-
-    for (const pin of env.GPIO_RELAY_PINS) {
-      try {
-        const gpio = new Gpio(pin, 'out');
-        this.relays.set(pin, gpio);
-      } catch (error) {
-        logger.error({ err: error, pin }, `Initialisation du GPIO ${pin} échouée.`);
-      }
-    }
-  }
+  private readonly chip = env.GPIO_CHIP;
 
   public async readStates(): Promise<RelayState[]> {
-    if (!this.accessible || this.relays.size === 0) {
+    if (this.pins.size === 0) {
       return [];
     }
 
     const states: RelayState[] = [];
-
-    for (const [pin, gpio] of this.relays.entries()) {
+    for (const pin of this.pins) {
       try {
-        const value = (await gpio.read()) as 0 | 1;
+        const value = await readGpioLine(pin, { chip: this.chip });
         states.push({ pin, value });
       } catch (error) {
-        logger.error({ err: error, pin }, `Lecture du GPIO ${pin} échouée.`);
+        logger.warn({ err: error, pin }, `Lecture du GPIO ${pin} indisponible.`);
       }
     }
-
     return states;
   }
 
   public async setState(pin: number, value: 0 | 1): Promise<void> {
-    if (!this.accessible) {
-      throw new Error('GPIO non accessibles sur cette plateforme.');
-    }
-
-    const gpio = this.relays.get(pin);
-    if (!gpio) {
+    if (!this.pins.has(pin)) {
       throw new Error(`GPIO ${pin} non enregistré dans la configuration.`);
     }
-
-    await gpio.write(value);
+    try {
+      await writeGpioLine(pin, value, { chip: this.chip });
+    } catch (error) {
+      logger.error({ err: error, pin, value }, `Écriture sur le GPIO ${pin} échouée.`);
+      throw error;
+    }
   }
 }
 

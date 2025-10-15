@@ -1,188 +1,235 @@
 # BPI Control Center
 
-Suite logicielle complète pour piloter une Banana Pi BPI‑F3 (SoC SpacemiT K1 – RISC‑V) depuis une interface web tactile. Le projet comprend :
+Suite logicielle complète pour piloter une Banana Pi BPI‑F3 (SoC SpacemiT K1 – RISC‑V) depuis une interface web tactile. Le projet est désormais 100 % compatible riscv64 sans module natif Node.js grâce à :
 
-- **Front-end** React/TypeScript (Vite + Tailwind CSS) alimenté par des données temps réel.
-- **Back-end** Node.js/TypeScript (Express) exposant des API REST sécurisées par JWT.
-- **Intégration matérielle** (Wi‑Fi, Bluetooth, capteurs I²C, GPIO) via NetworkManager, bluetoothctl, i2c-bus, onoff.
-- **Base de données** SQLite gérée par Sequelize (ORM compatible RISC-V).
+- **Front-end** React/TypeScript (Vite + Tailwind CSS).
+- **Back-end** Node.js/TypeScript (Express + Sequelize) avec prise en charge de PostgreSQL ou d’un moteur SQLite WebAssembly (`sql.js`).
+- **Accès matériel** par commandes système (NetworkManager `nmcli`, `bluetoothctl`, `gpioset/gpioget`, `i2cset/i2cget`, `stty`, `tee`, …) encapsulées dans `server/src/lib/hardware.ts`.
+- **Journalisation** pino, sécurisation JWT, partage de types front/back via `shared/`.
 
-## 1. Prérequis matériels et logiciels
+## 1. Matériel et prérequis logiciels
 
 | Élément | Détails |
 | --- | --- |
 | Carte | Banana Pi BPI‑F3 (CPU SpacemiT K1, 16 Go RAM) |
-| Stockage | eMMC 128 Go + SSD M.2 128 Go (optionnel pour la base de données) |
 | OS | Bianbu 25.04 Desktop Lite (Ubuntu 25.04 riscv64) |
-| Node.js | v18.x (préinstallé sur Bianbu) |
-| Build tools | `build-essential`, `python3`, `pkg-config` pour compiler les modules natifs (i2c-bus) |
-| Accès root | requis pour installer les dépendances système et configurer systemd |
+| Node.js | ≥ 18 (préinstallé sur Bianbu) |
+| Base de données | PostgreSQL 15+ (recommandé) ou stockage fichier `sql.js` |
 
-### Dépendances système supplémentaires
+### Dépendances système
 
 ```bash
 sudo apt update
-sudo apt install -y network-manager bluetooth bluez i2c-tools sqlite3 build-essential python3 pkg-config
+sudo apt install -y \
+  network-manager \
+  postgresql postgresql-contrib \
+  bluez bluetooth \
+  gpiod \
+  i2c-tools \
+  socat \
+  stow jq
 ```
 
-Activez les interfaces matérielles nécessaires (I²C, Bluetooth) dans l’OS et ajoutez l’utilisateur d’exécution (`www-data` dans le service systemd fourni) aux groupes `netdev`, `bluetooth`, `gpio` si besoin.
+> ℹ️ Si vous choisissez l’option `sql.js`, le service PostgreSQL peut être désactivé. Les dépendances matérielles (`gpiod`, `i2c-tools`, `socat`) restent requises pour piloter GPIO/I²C/série via la CLI.
+
+Activez les bus nécessaires (I²C, Bluetooth) dans l’OS et ajoutez l’utilisateur système d’exécution (`nov` dans le service systemd fourni) aux groupes `netdev`, `gpio`, `dialout`, `bluetooth` si besoin.
 
 ## 2. Installation du projet
 
 ```bash
 # Récupération du dépôt
+sudo mkdir -p /opt
 cd /opt
 sudo git clone https://github.com/<votre-compte>/BPI-ControlCenter.git
+sudo chown -R $USER:$USER BPI-ControlCenter
 cd BPI-ControlCenter
 
-# Configuration des variables d’environnement
-cp .env.example .env
-# Éditez .env pour définir les secrets JWT et le chemin SQLite (`DB_PATH`)
-# - `GPIO_RELAY_PINS` accepte un tableau JSON (ex. `[17, 18]`) pour activer la gestion des relais/LED via GPIO
-
-# Installation des dépendances
+# Installation des dépendances Node
 npm install
+
+# Copie de l’exemple d’environnement
+cp .env.example .env
 ```
 
-Les tables SQLite sont créées/ajustées automatiquement par Sequelize au premier démarrage (`sequelize.sync({ alter: true })`).
+Editez `.env` pour définir :
 
-> 💡 Pour un déploiement automatisé sur Banana Pi, utilisez le script `setup_bpi_controlcenter.sh` (il installe les dépendances, construit le front/back et exécute `initDatabase` pour initialiser le fichier SQLite).
+- les secrets JWT (`JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`) ;
+- la pile base de données (`DB_ENGINE=postgres` avec `PG_*` ou `DB_ENGINE=sqljs` avec `SQLJS_PERSISTENCE_PATH`) ;
+- la configuration matérielle (`GPIO_RELAY_PINS`, `GPIO_CHIP`, adresses I²C, `COMMAND_TIMEOUT_MS`).
 
-## 3. Démarrer les services
+### 2.1. Configuration PostgreSQL (recommandée)
+
+```bash
+sudo -u postgres createuser --pwprompt bpi_control
+sudo -u postgres createdb -O bpi_control bpi_control
+```
+
+Puis mettez à jour `.env` :
+
+```ini
+DB_ENGINE=postgres
+PG_HOST=127.0.0.1
+PG_PORT=5432
+PG_DATABASE=bpi_control
+PG_USER=bpi_control
+PG_PASSWORD=<mot_de_passe>
+PG_SSL=false
+```
+
+Les tables sont créées et migrées automatiquement via `sequelize.sync()` lors du démarrage (`initDatabase`).
+
+### 2.2. Option hors‑ligne `sql.js`
+
+Définissez :
+
+```ini
+DB_ENGINE=sqljs
+SQLJS_PERSISTENCE_PATH=./data/database.sqlite
+SQLJS_PATH=/opt/bpi-controlcenter/sql-wasm.wasm   # chemin optionnel si la WASM est déplacée
+```
+
+Vous pouvez initialiser ou manipuler le fichier en TypeScript via `server/src/database.ts` :
+
+```ts
+import { createSqlJsDatabase, runSqlJsMigrations } from './server/src/database';
+
+const { db, persist } = await createSqlJsDatabase();
+runSqlJsMigrations(db);
+// … exécuter des requêtes db.exec/db.prepare …
+await persist();
+```
+
+## 3. Construction et exécution
 
 ### Mode développement
 
 ```bash
-# Démarre l’API avec rechargement à chaud
-npm run dev:server
-
-# Dans une autre console, lance l’interface Vite
-npm run dev
+npm run dev:server   # API Express (tsx + rechargement)
+npm run dev          # Interface React/Vite
 ```
 
 ### Mode production
 
 ```bash
-# Construire front + back
-npm run build
-npm run build:server
-
-# Lancer l’API en production
-npm run start:server
-
-# Prévisualiser l’UI statique
-npm run preview
+npm run build        # Front-end
+npm run build:server # Back-end (transpile vers dist/server/src)
+NODE_ENV=production npm run start:server
 ```
 
-L’API écoute sur `http://localhost:4000/api` par défaut (configurable via `PORT` dans `.env`).
+Le script `start:server` démarre Node avec la résolution ESM (`--experimental-specifier-resolution=node`) et charge `dist/server/src/index.js`.
 
-## 4. Authentification et comptes
+## 4. Base de données et comptes
 
-La première connexion nécessite un utilisateur en base. Après le premier démarrage de l’API (qui crée les tables), vous pouvez insérer un compte administrateur via `sqlite3` :
+Créez un administrateur via `psql` (PostgreSQL) :
 
 ```bash
-# Génère un hachage bcrypt
-node -e "const bcrypt=require('bcryptjs'); bcrypt.hash('MotDePasseFort',10).then(console.log);"
-HASH="<collez-le-hash>"
-
-# Insère l'utilisateur dans la base (par défaut ./data/database.sqlite)
-sqlite3 ./data/database.sqlite <<'SQL'
-INSERT INTO users (id, email, passwordHash, role, createdAt, updatedAt)
-VALUES (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-' || '4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab',abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6))),
-       'admin@example.com', '$HASH', 'ADMIN', datetime('now'), datetime('now'))
-ON CONFLICT(email) DO UPDATE SET passwordHash = excluded.passwordHash, role = excluded.role, updatedAt = excluded.updatedAt;
+psql postgresql://bpi_control:<mot_de_passe>@localhost:5432/bpi_control <<'SQL'
+INSERT INTO users (id, email, "passwordHash", role, "createdAt", "updatedAt")
+VALUES (gen_random_uuid(), 'admin@example.com', '<hash-bcrypt>', 'ADMIN', now(), now())
+ON CONFLICT (email) DO UPDATE SET "passwordHash" = EXCLUDED."passwordHash", role = EXCLUDED.role, "updatedAt" = now();
 SQL
 ```
 
-Adaptez l’adresse e-mail, le rôle (`ADMIN` ou `USER`) et le hachage en fonction de vos besoins.
+Pour générer un hash :
 
-## 5. API REST
+```bash
+node -e "const bcrypt=require('bcryptjs'); bcrypt.hash('MotDePasseFort',10).then(console.log);"
+```
 
-La documentation OpenAPI est disponible dans `server/openapi.yaml`. Principaux endpoints :
+Avec `sql.js`, utilisez les helpers de `database.ts` pour exécuter des requêtes SQL équivalentes.
 
-- `POST /api/auth/login` / `POST /api/auth/refresh` – Authentification JWT.
-- `GET/POST /api/wifi/*` – État, activation et scan Wi‑Fi via `nmcli`.
+## 5. Accès matériel sans add-on natif
+
+Le module `server/src/lib/hardware.ts` encapsule :
+
+- GPIO : `gpioset` / `gpioget` (`gpiod`),
+- I²C : `i2cset` / `i2cget` (`i2c-tools`) pour BME280 & BH1750,
+- Série : `stty` + `tee`/`cat`,
+- Wi‑Fi/Ethernet : `nmcli`,
+- Bluetooth : `bluetoothctl`.
+
+Chaque appel est exécuté via `execFile` avec timeouts configurables (`COMMAND_TIMEOUT_MS`). Aucune chaîne n’est concaténée pour éviter les injections. Les tests `server/tests/hardware.test.ts` vérifient les paramètres transmis.
+
+## 6. API REST
+
+La spécification OpenAPI 3.1 est maintenue dans `server/openapi.yaml`. Principaux endpoints :
+
+- `POST /api/auth/login` & `POST /api/auth/refresh` – Authentification JWT.
+- `GET /api/wifi/status`, `POST /api/wifi/toggle`, `POST /api/wifi/connect`, `GET /api/wifi/networks` – Gestion Wi‑Fi via `nmcli`.
 - `GET/POST /api/bluetooth/*` – Gestion Bluetooth via `bluetoothctl`.
-- `GET /api/system/info` – Informations noyau, charge CPU, mémoire, disques, température.
-- `GET /api/sensors` – Lecture capteurs BME280 (température/humidité), BH1750 (luminosité) et états des relais GPIO (via onoff) + fallback DB.
-- `CRUD /api/terrariums` – Gestion des enclos, mesures, statut.
-- `GET/POST /api/settings` – Préférences globales.
+- `GET /api/sensors` – Capteurs BME280 (température/humidité), BH1750 (luminosité) et états relais GPIO.
+- `CRUD /api/terrariums` & `GET/POST /api/settings` – Gestion métier.
 
-Toutes les routes (hors `/auth/*`) exigent un header `Authorization: Bearer <token>`.
+Toutes les routes (hors `/auth/*`) nécessitent `Authorization: Bearer <token>`.
 
-## 6. Tests
+## 7. Tests
 
-Les tests d’intégration basés sur Vitest + Supertest se lancent avec :
+Tests unitaires/integration Vitest + Supertest :
 
 ```bash
 npm test
 ```
 
-Les tests isolent la logique en simulant l’accès matériel/DB.
+Le mode test force PostgreSQL en mémoire (`pg-mem`) et simule les commandes système.
 
-## 7. Déploiement systemd
+## 8. Déploiement systemd
 
-1. Copiez le service :
-   ```bash
-   sudo cp server/systemd/bpi-controlcenter.service /etc/systemd/system/
-   ```
-2. Créez un fichier `/etc/bpi-controlcenter.env` contenant les variables d’environnement (`DB_PATH`, `JWT_ACCESS_SECRET`, etc.).
-3. Déployez l’application dans `/opt/bpi-controlcenter` (ou ajustez `WorkingDirectory`).
-4. Activez puis démarrez le service :
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable bpi-controlcenter.service
-   sudo systemctl start bpi-controlcenter.service
-   sudo systemctl status bpi-controlcenter.service
-   ```
+Un service non-root est fourni (`server/systemd/bpi-controlcenter.service`) :
 
-## 8. Surveillance et journalisation
+```ini
+[Service]
+User=nov
+Group=nov
+WorkingDirectory=/opt/bpi-controlcenter
+EnvironmentFile=-/etc/bpi-controlcenter.env
+ExecStart=/usr/bin/node --experimental-specifier-resolution=node /opt/bpi-controlcenter/dist/server/src/index.js
+Restart=on-failure
+```
 
-- Les logs applicatifs sont produits par **pino** (JSON, format lisible en dev via pino-pretty).
-- `journalctl -u bpi-controlcenter -f` pour suivre l’API sous systemd.
-- Les capteurs se connectent automatiquement ; en cas d’échec, les dernières valeurs persistées sont renvoyées.
+Utilisez le script `install_service.sh` pour copier le service, installer les dépendances système et activer/démarrer l’unité :
 
-## 9. Bonnes pratiques & sécurité
+```bash
+sudo ./install_service.sh
+```
 
-- Changer immédiatement les secrets `JWT_ACCESS_SECRET` et `JWT_REFRESH_SECRET`.
-- Restreindre l’accès réseau au port 4000 derrière un reverse proxy HTTPS (nginx, Caddy).
-- Sauvegarder régulièrement le fichier SQLite (snapshot `sqlite3` ou backup volume).
-- Utiliser un utilisateur système dédié avec accès minimal aux bus I²C/Bluetooth.
-- Les commandes shell sont exécutées via `execFile` pour éviter l’injection ; ne pas modifier en `exec`.
+Le fichier `/etc/bpi-controlcenter.env` doit contenir les variables d’environnement (.env) nécessaires, notamment les paramètres PostgreSQL ou `sql.js`.
 
-## 10. Structure des répertoires
+## 9. Structure des répertoires
 
 ```
 BPI-ControlCenter/
 ├── public/                 # Assets statiques
 ├── server/
-│   ├── src/                # Code TypeScript du back-end
-│   │   └── models/         # Modèles Sequelize + initialisation
-│   ├── tests/              # Tests Vitest/Supertest
-│   └── systemd/            # Service systemd prêt à l'emploi
+│   ├── src/
+│   │   ├── app.ts          # Composition Express
+│   │   ├── database.ts     # Helpers sql.js
+│   │   ├── lib/            # Abstractions matériel & drivers
+│   │   └── models/         # Modèles Sequelize + initDatabase
+│   ├── tests/              # Tests Vitest
+│   └── systemd/            # Service systemd & scripts
+├── shared/                 # Types partagés front/back
 ├── src/                    # Front-end React/TypeScript
-│   ├── api/                # Client REST + hooks React Query
-│   ├── components/         # UI
-│   └── providers/          # AuthProvider
-└── server/openapi.yaml     # Spécification OpenAPI 3.1
+└── server/openapi.yaml     # Documentation OpenAPI 3.1
 ```
 
-## 11. Variables d’environnement principales
+## 10. Variables d’environnement clés
 
 | Variable | Description |
 | --- | --- |
-| `DB_PATH` | Chemin du fichier SQLite (ex. `./data/database.sqlite`) |
-| `JWT_ACCESS_SECRET` | Secret JWT accès (≥32 caractères recommandés) |
-| `JWT_REFRESH_SECRET` | Secret JWT refresh |
+| `DB_ENGINE` | `postgres` (défaut) ou `sqljs` |
+| `PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USER`, `PG_PASSWORD` | Paramètres PostgreSQL |
+| `PG_SSL`, `PG_SSL_REJECT_UNAUTHORIZED` | Activation SSL PostgreSQL |
+| `SQLJS_PERSISTENCE_PATH`, `SQLJS_PATH` | Chemins pour la base `sql.js` et la WASM |
+| `COMMAND_TIMEOUT_MS` | Timeout global des commandes shell (ms) |
+| `GPIO_CHIP`, `GPIO_RELAY_PINS` | Configuration GPIO (`gpioset/gpioget`) |
+| `I2C_BUS`, `BME280_I2C_ADDRESS`, `BH1750_I2C_ADDRESS` | Paramètres I²C |
+| `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | Secrets JWT |
 | `PORT` | Port HTTP de l’API (défaut 4000) |
-| `BME280_I2C_ADDRESS` | Adresse I²C du capteur BME280 (0x76 ou 0x77) |
-| `BH1750_I2C_ADDRESS` | Adresse I²C du capteur BH1750 |
-| `GPIO_RELAY_PINS` | Tableau JSON des GPIO utilisés pour relais/LED |
 
-## 12. Support et contributions
+## 11. Contribution
 
-- Ouvrez un ticket GitHub pour toute anomalie ou suggestion.
-- Respectez le style TypeScript strict (pas de `any`) et privilégiez les hooks React Query pour la gestion d’état distante.
-- Documentez tout nouveau capteur dans `README` et `openapi.yaml`.
+- Respectez le mode strict TypeScript (aucun `any`).
+- Mettez à jour `openapi.yaml`, la documentation et les tests pour tout nouvel endpoint ou capteur.
+- Les contributions doivent conserver l’exécution sans module natif et privilégier les commandes CLI sécurisées.
 
-Bonne intégration !
+Bon déploiement sur Banana Pi !

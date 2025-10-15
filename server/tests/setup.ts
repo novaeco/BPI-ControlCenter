@@ -1,4 +1,13 @@
-process.env.DB_PATH = process.env.DB_PATH ?? './data/test.db';
+process.env.DB_ENGINE = 'postgres';
+process.env.PG_IN_MEMORY = 'true';
+process.env.PG_HOST = process.env.PG_HOST ?? '127.0.0.1';
+process.env.PG_PORT = process.env.PG_PORT ?? '5432';
+process.env.PG_DATABASE = process.env.PG_DATABASE ?? 'test';
+process.env.PG_USER = process.env.PG_USER ?? 'test';
+process.env.PG_PASSWORD = process.env.PG_PASSWORD ?? 'test';
+process.env.COMMAND_TIMEOUT_MS = process.env.COMMAND_TIMEOUT_MS ?? '1000';
+process.env.I2C_BUS = process.env.I2C_BUS ?? '1';
+process.env.GPIO_CHIP = process.env.GPIO_CHIP ?? 'gpiochip0';
 process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? 'test-access-secret';
 process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? 'test-refresh-secret';
 process.env.NODE_ENV = 'test';
