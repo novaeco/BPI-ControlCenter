@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { refreshTokenRequest, loginRequest } from '../api/auth';
+import { loadFromLocalStorage, removeFromLocalStorage, saveToLocalStorage } from '../utils/localStorage';
 
 interface AuthTokens {
   accessToken: string;
@@ -19,32 +20,21 @@ const STORAGE_KEY = 'bpi-controlcenter-tokens';
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const readStoredTokens = (): AuthTokens | null => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw) as AuthTokens;
-    return parsed;
-  } catch (error) {
-    console.error('Unable to parse stored tokens', error);
-    return null;
-  }
-};
+const readStoredTokens = (): AuthTokens | null => loadFromLocalStorage<AuthTokens | null>(STORAGE_KEY, null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [tokens, setTokens] = useState<AuthTokens | null>(() => readStoredTokens());
 
   useEffect(() => {
     if (tokens) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tokens));
+      saveToLocalStorage(STORAGE_KEY, tokens);
     } else {
-      localStorage.removeItem(STORAGE_KEY);
+      removeFromLocalStorage(STORAGE_KEY);
     }
   }, [tokens]);
 
   const logout = useCallback(() => {
+    removeFromLocalStorage(STORAGE_KEY);
     setTokens(null);
   }, []);
 

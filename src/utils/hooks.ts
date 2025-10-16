@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
+import { loadFromLocalStorage, saveToLocalStorage } from './localStorage';
 
 export const useToggle = (initialState = false) => {
   const [state, setState] = useState(initialState);
@@ -16,24 +17,18 @@ export const useFormState = <T extends Record<string, any>>(initialState: T) => 
 };
 
 export const useLocalStorage = <T>(key: string, initialValue: T) => {
-  const [storedValue, setStoredValue] = useState<T>(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch {
-      return initialValue;
-    }
-  });
+  const [storedValue, setStoredValue] = useState<T>(() => loadFromLocalStorage<T>(key, initialValue));
 
-  const setValue = (value: T | ((val: T) => T)) => {
-    try {
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      window.localStorage.setItem(key, JSON.stringify(valueToStore));
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  const setValue = useCallback(
+    (value: T | ((val: T) => T)) => {
+      setStoredValue((previousValue) => {
+        const valueToStore = value instanceof Function ? value(previousValue) : value;
+        saveToLocalStorage(key, valueToStore);
+        return valueToStore;
+      });
+    },
+    [key]
+  );
 
   return [storedValue, setValue] as const;
 };
