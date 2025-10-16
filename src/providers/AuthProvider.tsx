@@ -1,5 +1,6 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo } from 'react';
 import { refreshTokenRequest, loginRequest } from '../api/auth';
+import { useLocalStorage } from '../utils/hooks';
 
 interface AuthTokens {
   accessToken: string;
@@ -19,34 +20,12 @@ const STORAGE_KEY = 'bpi-controlcenter-tokens';
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const readStoredTokens = (): AuthTokens | null => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw) as AuthTokens;
-    return parsed;
-  } catch (error) {
-    console.error('Unable to parse stored tokens', error);
-    return null;
-  }
-};
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [tokens, setTokens] = useState<AuthTokens | null>(() => readStoredTokens());
-
-  useEffect(() => {
-    if (tokens) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tokens));
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  }, [tokens]);
+  const [tokens, setTokens] = useLocalStorage<AuthTokens | null>(STORAGE_KEY, null);
 
   const logout = useCallback(() => {
     setTokens(null);
-  }, []);
+  }, [setTokens]);
 
   const login = useCallback(async (email: string, password: string) => {
     const response = await loginRequest(email, password);
@@ -55,7 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       refreshToken: response.refreshToken,
       expiresAt: Date.now() + response.expiresIn * 1000
     });
-  }, []);
+  }, [setTokens]);
 
   const ensureFreshToken = useCallback(async (): Promise<string | null> => {
     if (!tokens) {
@@ -78,7 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout();
       return null;
     }
-  }, [logout, tokens]);
+  }, [logout, setTokens, tokens]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
