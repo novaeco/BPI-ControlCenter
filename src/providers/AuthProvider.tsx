@@ -1,5 +1,6 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo } from 'react';
 import { refreshTokenRequest, loginRequest } from '../api/auth';
+import { useLocalStorage } from '../utils/hooks';
 import { loadFromLocalStorage, removeFromLocalStorage, saveToLocalStorage } from '../utils/localStorage';
 
 interface AuthTokens {
@@ -20,6 +21,8 @@ const STORAGE_KEY = 'bpi-controlcenter-tokens';
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [tokens, setTokens] = useLocalStorage<AuthTokens | null>(STORAGE_KEY, null);
 const readStoredTokens = (): AuthTokens | null => loadFromLocalStorage<AuthTokens | null>(STORAGE_KEY, null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -36,7 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = useCallback(() => {
     removeFromLocalStorage(STORAGE_KEY);
     setTokens(null);
-  }, []);
+  }, [setTokens]);
 
   const login = useCallback(async (email: string, password: string) => {
     const response = await loginRequest(email, password);
@@ -45,7 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       refreshToken: response.refreshToken,
       expiresAt: Date.now() + response.expiresIn * 1000
     });
-  }, []);
+  }, [setTokens]);
 
   const ensureFreshToken = useCallback(async (): Promise<string | null> => {
     if (!tokens) {
@@ -68,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout();
       return null;
     }
-  }, [logout, tokens]);
+  }, [logout, setTokens, tokens]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

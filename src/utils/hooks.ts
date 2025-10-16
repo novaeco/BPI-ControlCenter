@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { loadFromLocalStorage, removeFromLocalStorage, saveToLocalStorage } from './localStorage';
 import { loadFromLocalStorage, saveToLocalStorage } from './localStorage';
 
 export const useToggle = (initialState = false) => {
@@ -23,6 +24,11 @@ export const useLocalStorage = <T>(key: string, initialValue: T) => {
     (value: T | ((val: T) => T)) => {
       setStoredValue((previousValue) => {
         const valueToStore = value instanceof Function ? value(previousValue) : value;
+        if (valueToStore === null || valueToStore === undefined) {
+          removeFromLocalStorage(key);
+        } else {
+          saveToLocalStorage(key, valueToStore);
+        }
         saveToLocalStorage(key, valueToStore);
         return valueToStore;
       });
