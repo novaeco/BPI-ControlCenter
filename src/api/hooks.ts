@@ -22,7 +22,13 @@ import {
   updateTerrariumRequest,
   deleteTerrariumRequest,
   WifiNetwork,
-  WifiStatusResponse
+  WifiStatusResponse,
+  connectWifiNetwork,
+  WifiConnectionResponse,
+  fetchRelayStates,
+  RelayListResponse,
+  updateRelayStateRequest,
+  RelayStateDto
 } from './controlCenter';
 import { useAuth } from '../providers/AuthProvider';
 
@@ -79,6 +85,9 @@ export const useWifiNetworks = (enabled = true): QueryResult<WifiNetwork[]> =>
 export const useToggleWifi = (): MutationResult<WifiStatusResponse, boolean> =>
   useAuthorizedMutation((enabled, token) => toggleWifi(token, enabled));
 
+export const useConnectWifi = (): MutationResult<WifiConnectionResponse, { ssid: string; password?: string }> =>
+  useAuthorizedMutation((payload, token) => connectWifiNetwork(token, payload.ssid, payload.password));
+
 export const useBluetoothStatus = (): QueryResult<BluetoothStatusResponse> =>
   useAuthorizedQuery(['bluetooth', 'status'], fetchBluetoothStatus);
 
@@ -106,8 +115,14 @@ export const useUpdateTerrarium = (): MutationResult<TerrariumDto, { id: string;
 export const useDeleteTerrarium = (): MutationResult<void, string> =>
   useAuthorizedMutation((id, token) => deleteTerrariumRequest(token, id));
 
-export const useSettings = (): QueryResult<SettingDto[]> =>
-  useAuthorizedQuery(['settings'], fetchSettings, { staleTime: 60_000 });
+export const useSettings = (enabled = true): QueryResult<SettingDto[]> =>
+  useAuthorizedQuery(['settings'], fetchSettings, { staleTime: 60_000, enabled });
 
 export const useUpdateSetting = (): MutationResult<SettingDto, { key: string; value: unknown }> =>
   useAuthorizedMutation(({ key, value }, token) => updateSettingRequest(token, key, value));
+
+export const useRelayStates = (): QueryResult<RelayListResponse> =>
+  useAuthorizedQuery(['gpio', 'relays'], fetchRelayStates, { refetchInterval: 10_000, staleTime: 5000 });
+
+export const useUpdateRelayState = (): MutationResult<RelayStateDto, { pin: number; value: 0 | 1 }> =>
+  useAuthorizedMutation(({ pin, value }, token) => updateRelayStateRequest(token, pin, value));

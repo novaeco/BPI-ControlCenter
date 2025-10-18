@@ -11,6 +11,11 @@ export interface WifiNetwork {
   secure: boolean;
 }
 
+export interface WifiConnectionResponse {
+  connected: boolean;
+  ssid: string;
+}
+
 export interface BluetoothStatusResponse {
   powered: boolean;
 }
@@ -78,10 +83,25 @@ export interface SettingDto {
   updatedAt: string;
 }
 
+export interface RelayStateDto {
+  pin: number;
+  value: 0 | 1;
+}
+
+export interface RelayListResponse {
+  relays: RelayStateDto[];
+}
+
 export const fetchWifiStatus = (token: string) => apiRequest<WifiStatusResponse>('/wifi/status', { token });
 export const toggleWifi = (token: string, enabled: boolean) =>
   apiRequest<WifiStatusResponse>('/wifi/toggle', { token, method: 'POST', body: JSON.stringify({ enabled }) });
 export const fetchWifiNetworks = (token: string) => apiRequest<WifiNetwork[]>('/wifi/networks', { token });
+export const connectWifiNetwork = (token: string, ssid: string, password?: string) =>
+  apiRequest<WifiConnectionResponse>('/wifi/connect', {
+    token,
+    method: 'POST',
+    body: JSON.stringify({ ssid, password })
+  });
 
 export const fetchBluetoothStatus = (token: string) => apiRequest<BluetoothStatusResponse>('/bluetooth/status', { token });
 export const toggleBluetooth = (token: string, powered: boolean) =>
@@ -102,3 +122,11 @@ export const deleteTerrariumRequest = (token: string, id: string) =>
 export const fetchSettings = (token: string) => apiRequest<SettingDto[]>('/settings', { token });
 export const updateSettingRequest = (token: string, key: string, value: unknown) =>
   apiRequest<SettingDto>('/settings', { token, method: 'POST', body: JSON.stringify({ key, value }) });
+
+export const fetchRelayStates = (token: string) => apiRequest<RelayListResponse>('/gpio/relays', { token });
+export const updateRelayStateRequest = (token: string, pin: number, value: 0 | 1) =>
+  apiRequest<RelayStateDto>(`/gpio/relays/${pin}`, {
+    token,
+    method: 'PUT',
+    body: JSON.stringify({ value })
+  });

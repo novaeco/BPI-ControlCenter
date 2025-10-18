@@ -21,6 +21,7 @@ import { loginHandler, refreshHandler } from '../controllers/authController';
 import { listSettings, updateSetting } from '../controllers/settingsController';
 import { authenticate } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
+import { listRelayStates, updateRelayStateHandler } from '../controllers/gpioController';
 
 export const apiRouter = Router();
 
@@ -47,3 +48,6 @@ apiRouter.delete('/terrariums/:id', authenticate, asyncHandler(deleteTerrariumHa
 
 apiRouter.get('/settings', authenticate, asyncHandler(listSettings));
 apiRouter.post('/settings', authenticate, asyncHandler(updateSetting));
+
+apiRouter.get('/gpio/relays', authenticate, asyncHandler(listRelayStates));
+apiRouter.put('/gpio/relays/:pin', authenticate, asyncHandler(updateRelayStateHandler));

@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
 import { loadFromLocalStorage, removeFromLocalStorage, saveToLocalStorage } from './localStorage';
-import { loadFromLocalStorage, saveToLocalStorage } from './localStorage';
 
 export const useToggle = (initialState = false) => {
   const [state, setState] = useState(initialState);
@@ -29,7 +28,6 @@ export const useLocalStorage = <T>(key: string, initialValue: T) => {
         } else {
           saveToLocalStorage(key, valueToStore);
         }
-        saveToLocalStorage(key, valueToStore);
         return valueToStore;
       });
     },

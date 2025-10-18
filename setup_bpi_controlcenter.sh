@@ -29,8 +29,11 @@ npm run build
 npm run build:server
 
 # Pré-crée le schéma SQLite sans lancer l'API complète.
-if [[ -f "dist/server/models/index.js" ]]; then
-  node --input-type=module -e "import('./dist/server/models/index.js').then(m => m.initDatabase()).then(() => process.exit(0)).catch((err) => { console.error(err); process.exit(1); });"
+MODEL_ENTRY="dist/server/src/models/index.js"
+if [[ -f "$MODEL_ENTRY" ]]; then
+  node --input-type=module -e "import('./$MODEL_ENTRY').then((m) => m.initDatabase()).then(() => process.exit(0)).catch((err) => { console.error(err); process.exit(1); });"
+else
+  echo "[AVERTISSEMENT] Le build serveur ($MODEL_ENTRY) est introuvable. Exécutez 'npm run build:server' avant l'initialisation." >&2
 fi
 
 echo "Installation terminée. Base SQLite initialisée dans $DB_PATH"

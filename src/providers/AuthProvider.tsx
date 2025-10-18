@@ -1,7 +1,6 @@
 import React, { createContext, useCallback, useContext, useMemo } from 'react';
 import { refreshTokenRequest, loginRequest } from '../api/auth';
 import { useLocalStorage } from '../utils/hooks';
-import { loadFromLocalStorage, removeFromLocalStorage, saveToLocalStorage } from '../utils/localStorage';
 
 interface AuthTokens {
   accessToken: string;
@@ -23,40 +22,32 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [tokens, setTokens] = useLocalStorage<AuthTokens | null>(STORAGE_KEY, null);
-const readStoredTokens = (): AuthTokens | null => loadFromLocalStorage<AuthTokens | null>(STORAGE_KEY, null);
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [tokens, setTokens] = useState<AuthTokens | null>(() => readStoredTokens());
-
-  useEffect(() => {
-    if (tokens) {
-      saveToLocalStorage(STORAGE_KEY, tokens);
-    } else {
-      removeFromLocalStorage(STORAGE_KEY);
-    }
-  }, [tokens]);
 
   const logout = useCallback(() => {
-    removeFromLocalStorage(STORAGE_KEY);
     setTokens(null);
   }, [setTokens]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const response = await loginRequest(email, password);
-    setTokens({
-      accessToken: response.accessToken,
-      refreshToken: response.refreshToken,
-      expiresAt: Date.now() + response.expiresIn * 1000
-    });
-  }, [setTokens]);
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const response = await loginRequest(email, password);
+      setTokens({
+        accessToken: response.accessToken,
+        refreshToken: response.refreshToken,
+        expiresAt: Date.now() + response.expiresIn * 1000
+      });
+    },
+    [setTokens]
+  );
 
   const ensureFreshToken = useCallback(async (): Promise<string | null> => {
     if (!tokens) {
       return null;
     }
+
     if (Date.now() < tokens.expiresAt - 5000) {
       return tokens.accessToken;
     }
+
     try {
       const refreshed = await refreshTokenRequest(tokens.refreshToken);
       const nextTokens: AuthTokens = {
