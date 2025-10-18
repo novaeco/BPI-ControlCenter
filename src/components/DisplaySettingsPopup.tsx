@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { X, Save, Monitor, Sun, Moon, Sliders, Eye, Palette } from 'lucide-react';
+import React, { useCallback } from 'react';
+import { X, Save, Monitor, Moon, Sliders, Eye, Palette, AlertTriangle, RefreshCw } from 'lucide-react';
+import { usePersistedSetting } from '../hooks/usePersistedSetting';
 
 interface DisplaySettingsPopupProps {
   isOpen: boolean;
@@ -7,54 +8,76 @@ interface DisplaySettingsPopupProps {
 }
 
 const DisplaySettingsPopup: React.FC<DisplaySettingsPopupProps> = ({ isOpen, onClose }) => {
-  const [settings, setSettings] = useState({
-    theme: 'dark',
-    brightness: '100',
-    contrast: '100',
-    saturation: '100',
-    sharpness: '100',
-    gamma: '100',
-    colorTemp: '6500',
-    nightLight: false,
-    nightLightIntensity: '50',
-    autoNightLight: true,
-    nightLightSchedule: {
-      start: '20:00',
-      end: '06:00'
+  const {
+    state: settings,
+    setState,
+    save,
+    isSaving,
+    saveError,
+    loadError,
+    settingsQuery
+  } = usePersistedSetting({
+    key: 'display.settings',
+    defaultValue: {
+      theme: 'dark',
+      brightness: '100',
+      contrast: '100',
+      saturation: '100',
+      sharpness: '100',
+      gamma: '100',
+      colorTemp: '6500',
+      nightLight: false,
+      nightLightIntensity: '50',
+      autoNightLight: true,
+      nightLightSchedule: {
+        start: '20:00',
+        end: '06:00'
+      },
+      dataMode: false,
+      motionBlur: true,
+      animations: true,
+      reducedMotion: false,
+      resolution: '1920x1080',
+      refreshRate: '60',
+      scaling: '100',
+      hdrEnabled: true
     },
-    dataMode: false,
-    motionBlur: true,
-    animations: true,
-    reducedMotion: false,
-    resolution: '1920x1080',
-    refreshRate: '60',
-    scaling: '100',
-    hdrEnabled: true
+    enabled: isOpen
   });
 
-  if (!isOpen) return null;
-
-  const handleChange = (field: keyof typeof settings, value: string | boolean) => {
-    setSettings(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const handleScheduleChange = (field: keyof typeof settings.nightLightSchedule, value: string) => {
-    setSettings(prev => ({
-      ...prev,
-      nightLightSchedule: {
-        ...prev.nightLightSchedule,
+  const handleChange = useCallback(
+    (field: keyof typeof settings, value: string | boolean) => {
+      setState((previous) => ({
+        ...previous,
         [field]: value
-      }
-    }));
-  };
+      }));
+    },
+    [setState]
+  );
 
-  const handleSave = () => {
-    console.log('Saving display settings:', settings);
-    onClose();
-  };
+  const handleScheduleChange = useCallback(
+    (field: keyof typeof settings.nightLightSchedule, value: string) => {
+      setState((previous) => ({
+        ...previous,
+        nightLightSchedule: {
+          ...previous.nightLightSchedule,
+          [field]: value
+        }
+      }));
+    },
+    [setState]
+  );
+
+  const handleSave = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      await save();
+      onClose();
+    },
+    [onClose, save]
+  );
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
@@ -68,6 +91,7 @@ const DisplaySettingsPopup: React.FC<DisplaySettingsPopupProps> = ({ isOpen, onC
             <h2 className="text-xl font-bold text-cyan-400">Display Settings</h2>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="text-gray-400 hover:text-white transition-colors"
           >
@@ -75,7 +99,16 @@ const DisplaySettingsPopup: React.FC<DisplaySettingsPopupProps> = ({ isOpen, onC
           </button>
         </div>
 
-        <div className="p-4">
+        <form id="display-settings-form" className="p-4" onSubmit={handleSave}>
+          {settingsQuery.isLoading && (
+            <p className="text-sm text-gray-400 mb-4">Chargement des paramètres…</p>
+          )}
+          {(loadError || saveError) && (
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span>{loadError ?? saveError}</span>
+            </div>
+          )}
           <div className="space-y-6">
             <div className="bg-[#141e2a] rounded-lg p-4 border border-gray-700">
               <h3 className="text-white font-medium flex items-center gap-2 mb-4">
@@ -152,6 +185,7 @@ const DisplaySettingsPopup: React.FC<DisplaySettingsPopupProps> = ({ isOpen, onC
                 <div className="flex items-center justify-between">
                   <span className="text-white text-sm">Night Light</span>
                   <button
+                    type="button"
                     onClick={() => handleChange('nightLight', !settings.nightLight)}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                       settings.nightLight ? 'bg-cyan-400' : 'bg-gray-600'
@@ -183,6 +217,7 @@ const DisplaySettingsPopup: React.FC<DisplaySettingsPopupProps> = ({ isOpen, onC
                 <div className="flex items-center justify-between">
                   <span className="text-white text-sm">Auto Schedule</span>
                   <button
+                    type="button"
                     onClick={() => handleChange('autoNightLight', !settings.autoNightLight)}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                       settings.autoNightLight ? 'bg-cyan-400' : 'bg-gray-600'
@@ -234,6 +269,7 @@ const DisplaySettingsPopup: React.FC<DisplaySettingsPopupProps> = ({ isOpen, onC
                 <div className="flex items-center justify-between">
                   <span className="text-white text-sm">Data Mode</span>
                   <button
+                    type="button"
                     onClick={() => handleChange('dataMode', !settings.dataMode)}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                       settings.dataMode ? 'bg-cyan-400' : 'bg-gray-600'
@@ -250,6 +286,7 @@ const DisplaySettingsPopup: React.FC<DisplaySettingsPopupProps> = ({ isOpen, onC
                 <div className="flex items-center justify-between">
                   <span className="text-white text-sm">Motion Blur</span>
                   <button
+                    type="button"
                     onClick={() => handleChange('motionBlur', !settings.motionBlur)}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                       settings.motionBlur ? 'bg-cyan-400' : 'bg-gray-600'
@@ -266,6 +303,7 @@ const DisplaySettingsPopup: React.FC<DisplaySettingsPopupProps> = ({ isOpen, onC
                 <div className="flex items-center justify-between">
                   <span className="text-white text-sm">Animations</span>
                   <button
+                    type="button"
                     onClick={() => handleChange('animations', !settings.animations)}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                       settings.animations ? 'bg-cyan-400' : 'bg-gray-600'
@@ -282,6 +320,7 @@ const DisplaySettingsPopup: React.FC<DisplaySettingsPopupProps> = ({ isOpen, onC
                 <div className="flex items-center justify-between">
                   <span className="text-white text-sm">Reduced Motion</span>
                   <button
+                    type="button"
                     onClick={() => handleChange('reducedMotion', !settings.reducedMotion)}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                       settings.reducedMotion ? 'bg-cyan-400' : 'bg-gray-600'
@@ -355,6 +394,7 @@ const DisplaySettingsPopup: React.FC<DisplaySettingsPopupProps> = ({ isOpen, onC
                 <div className="flex items-center justify-between">
                   <span className="text-white text-sm">HDR</span>
                   <button
+                    type="button"
                     onClick={() => handleChange('hdrEnabled', !settings.hdrEnabled)}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                       settings.hdrEnabled ? 'bg-cyan-400' : 'bg-gray-600'
@@ -370,23 +410,35 @@ const DisplaySettingsPopup: React.FC<DisplaySettingsPopupProps> = ({ isOpen, onC
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="p-4 border-t border-gray-700 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-md bg-gray-700 text-white hover:bg-gray-600 transition-colors text-sm"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 rounded-md bg-cyan-500 text-white hover:bg-cyan-400 transition-colors text-sm flex items-center gap-2"
-          >
-            <Save className="w-4 h-4" />
-            Save Changes
-          </button>
-        </div>
+          <div className="pt-4 border-t border-gray-700 mt-4 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-md bg-gray-700 text-white hover:bg-gray-600 transition-colors text-sm"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              form="display-settings-form"
+              disabled={isSaving}
+              className="px-4 py-2 rounded-md bg-cyan-500 text-white hover:bg-cyan-400 transition-colors text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSaving ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Sauvegarde...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Sauvegarder
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

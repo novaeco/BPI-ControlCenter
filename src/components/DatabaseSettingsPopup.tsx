@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { X, Save, Database, Shield, RefreshCw, HardDrive, Activity, Clock } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+import { X, Save, Database, Shield, RefreshCw, HardDrive, Activity, Clock, AlertTriangle } from 'lucide-react';
+import { usePersistedSetting } from '../hooks/usePersistedSetting';
 
 interface DatabaseConfig {
   host: string;
@@ -29,50 +30,72 @@ interface DatabaseSettingsPopupProps {
 }
 
 const DatabaseSettingsPopup: React.FC<DatabaseSettingsPopupProps> = ({ isOpen, onClose }) => {
-  const [config, setConfig] = useState<DatabaseConfig>({
-    host: 'localhost',
-    port: '5432',
-    name: 'novaecosystem',
-    user: 'postgres',
-    password: '',
-    maxConnections: '100',
-    connectionTimeout: '30',
-    idleTimeout: '300',
-    sslMode: 'require',
-    poolSize: '20',
-    statementTimeout: '30000',
-    backupEnabled: true,
-    backupSchedule: '0 0 * * *',
-    backupRetention: '30',
-    backupPath: '/var/backups/db',
-    replicationEnabled: false,
-    replicaHost: '',
-    replicaPort: '5432',
-    replicaUser: ''
+  const {
+    state: config,
+    setState,
+    save,
+    isSaving,
+    saveError,
+    loadError,
+    settingsQuery
+  } = usePersistedSetting<DatabaseConfig>({
+    key: 'database.config',
+    defaultValue: {
+      host: 'localhost',
+      port: '5432',
+      name: 'novaecosystem',
+      user: 'postgres',
+      password: '',
+      maxConnections: '100',
+      connectionTimeout: '30',
+      idleTimeout: '300',
+      sslMode: 'require',
+      poolSize: '20',
+      statementTimeout: '30000',
+      backupEnabled: true,
+      backupSchedule: '0 0 * * *',
+      backupRetention: '30',
+      backupPath: '/var/backups/db',
+      replicationEnabled: false,
+      replicaHost: '',
+      replicaPort: '5432',
+      replicaUser: ''
+    },
+    enabled: isOpen
   });
 
   const [isTestingConnection, setIsTestingConnection] = useState(false);
 
-  if (!isOpen) return null;
+  const handleChange = useCallback(
+    (field: keyof DatabaseConfig, value: string | boolean) => {
+      setState((previous) => ({
+        ...previous,
+        [field]: value
+      }));
+    },
+    [setState]
+  );
 
-  const handleChange = (field: keyof DatabaseConfig, value: string | boolean) => {
-    setConfig(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
+  const handleSave = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      await save();
+      onClose();
+    },
+    [onClose, save]
+  );
 
-  const handleSave = () => {
-    console.log('Saving database configuration:', config);
-    onClose();
-  };
-
-  const handleTestConnection = async () => {
+  const handleTestConnection = useCallback(async () => {
     setIsTestingConnection(true);
-    // Simulate connection test
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsTestingConnection(false);
-  };
+    try {
+      await save();
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    } finally {
+      setIsTestingConnection(false);
+    }
+  }, [save]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
@@ -85,15 +108,21 @@ const DatabaseSettingsPopup: React.FC<DatabaseSettingsPopupProps> = ({ isOpen, o
             <Database className="w-5 h-5 text-cyan-400" />
             <h2 className="text-xl font-bold text-cyan-400">Database Configuration</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto">
+        <form className="p-6 overflow-y-auto" onSubmit={handleSave}>
+          {settingsQuery.isLoading && (
+            <p className="text-sm text-gray-400 mb-4">Chargement des paramètres…</p>
+          )}
+          {(loadError || saveError) && (
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span>{loadError ?? saveError}</span>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-6">
               <div className="bg-[#141e2a] rounded-lg p-4 border border-gray-700">
@@ -317,42 +346,26 @@ const DatabaseSettingsPopup: React.FC<DatabaseSettingsPopupProps> = ({ isOpen, o
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="p-4 border-t border-gray-700 flex justify-between gap-3">
-          <button
-            onClick={handleTestConnection}
-            disabled={isTestingConnection}
-            className="px-4 py-2 rounded-md bg-[#141e2a] text-cyan-400 hover:bg-[#141e2a]/70 transition-colors text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isTestingConnection ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                Testing Connection...
-              </>
-            ) : (
-              <>
-                <Activity className="w-4 h-4" />
-                Test Connection
-              </>
-            )}
-          </button>
-          <div className="flex gap-3">
+          <div className="pt-2 border-t border-gray-700 mt-4 flex items-center justify-between gap-4">
             <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-md bg-gray-700 text-white hover:bg-gray-600 transition-colors text-sm"
+              type="button"
+              onClick={handleTestConnection}
+              disabled={isTestingConnection || isSaving}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-cyan-500/40 text-sm text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Cancel
+              {isTestingConnection ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              Tester la connexion
             </button>
             <button
-              onClick={handleSave}
-              className="px-4 py-2 rounded-md bg-cyan-500 text-white hover:bg-cyan-400 transition-colors text-sm flex items-center gap-2"
+              type="submit"
+              disabled={isSaving}
+              className="px-4 py-2 bg-cyan-500 text-white rounded-md hover:bg-cyan-400 transition-colors text-sm inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save className="w-4 h-4" />
-              Save Changes
+              Sauvegarder
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

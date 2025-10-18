@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Settings2, Volume2, Bell, Moon, Languages, Wifi, Bluetooth, ChevronRight, Activity, MonitorCheck, Server, Database, UserCircle2, Package, Cpu, Cable, BrainCircuit as Circuit, Radio, Usb, Puzzle, Brain, Ruler, Network, Keyboard, Monitor, X } from 'lucide-react';
 import SensorSettingsPopup from './SensorSettingsPopup';
 import SystemInfoPopup from './SystemInfoPopup';
@@ -15,6 +16,15 @@ import WifiPopup from './WifiPopup';
 import BluetoothPopup from './BluetoothPopup';
 import VirtualKeyboardSettingsPopup from './VirtualKeyboardSettingsPopup';
 import DisplaySettingsPopup from './DisplaySettingsPopup';
+import {
+  useBluetoothDevices,
+  useBluetoothStatus,
+  useConnectWifi,
+  useToggleBluetooth,
+  useToggleWifi,
+  useWifiNetworks,
+  useWifiStatus
+} from '../api/hooks';
 
 interface GeneralSettingsPopupProps {
   isOpen: boolean;
@@ -38,22 +48,88 @@ const GeneralSettingsPopup: React.FC<GeneralSettingsPopupProps> = ({ isOpen, onC
   const [bluetoothPopupOpen, setBluetoothPopupOpen] = useState(false);
   const [virtualKeyboardOpen, setVirtualKeyboardOpen] = useState(false);
   const [displaySettingsOpen, setDisplaySettingsOpen] = useState(false);
-  const [wifiEnabled, setWifiEnabled] = useState(true);
-  const [bluetoothEnabled, setBluetoothEnabled] = useState(true);
+  const queryClient = useQueryClient();
+  const wifiStatus = useWifiStatus();
+  const toggleWifiMutation = useToggleWifi();
+  const connectWifiMutation = useConnectWifi();
+  const wifiNetworks = useWifiNetworks(wifiPopupOpen && (wifiStatus.data?.enabled ?? false));
+  const bluetoothStatus = useBluetoothStatus();
+  const toggleBluetoothMutation = useToggleBluetooth();
+  const bluetoothDevices = useBluetoothDevices();
+  const [wifiError, setWifiError] = useState<string | null>(null);
+  const [bluetoothError, setBluetoothError] = useState<string | null>(null);
+
+  const handleClose = useCallback(() => {
+    setWifiPopupOpen(false);
+    setBluetoothPopupOpen(false);
+    setWifiError(null);
+    setBluetoothError(null);
+    onClose();
+  }, [onClose]);
+
+  const handleWifiToggle = useCallback(async () => {
+    if (!wifiStatus.data) {
+      return;
+    }
+    setWifiError(null);
+    try {
+      await toggleWifiMutation.mutateAsync(!wifiStatus.data.enabled);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['wifi', 'status'] }),
+        queryClient.invalidateQueries({ queryKey: ['wifi', 'networks'] })
+      ]);
+    } catch (error) {
+      setWifiError(error instanceof Error ? error.message : 'Impossible de basculer le Wi-Fi.');
+    }
+  }, [queryClient, toggleWifiMutation, wifiStatus.data]);
+
+  const handleWifiConnect = useCallback(
+    async (ssid: string, password?: string) => {
+      setWifiError(null);
+      try {
+        await connectWifiMutation.mutateAsync({ ssid, password });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['wifi', 'networks'] }),
+          queryClient.invalidateQueries({ queryKey: ['wifi', 'status'] })
+        ]);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Connexion Wi-Fi échouée.';
+        setWifiError(message);
+        throw error;
+      }
+    },
+    [connectWifiMutation, queryClient]
+  );
+
+  const handleBluetoothToggle = useCallback(async () => {
+    if (!bluetoothStatus.data) {
+      return;
+    }
+    setBluetoothError(null);
+    try {
+      await toggleBluetoothMutation.mutateAsync(!bluetoothStatus.data.powered);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['bluetooth', 'status'] }),
+        queryClient.invalidateQueries({ queryKey: ['bluetooth', 'devices'] })
+      ]);
+    } catch (error) {
+      setBluetoothError(error instanceof Error ? error.message : 'Impossible de basculer le Bluetooth.');
+    }
+  }, [bluetoothStatus.data, queryClient, toggleBluetoothMutation]);
 
   if (!isOpen) return null;
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
-        <div 
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={handleClose}>
+        <div
           className="bg-[#1c2936] w-full max-w-4xl rounded-lg shadow-xl border border-gray-700"
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
             <h2 className="text-xl font-bold text-cyan-400">General Settings</h2>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="text-gray-400 hover:text-white transition-colors"
             >
               <X className="w-5 h-5" />
@@ -188,35 +264,69 @@ const GeneralSettingsPopup: React.FC<GeneralSettingsPopupProps> = ({ isOpen, onC
                     <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-cyan-400 transition-colors" />
                   </button>
 
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setWifiPopupOpen(!wifiPopupOpen);
-                      setBluetoothPopupOpen(false);
-                    }}
-                    className="w-full flex items-center justify-between p-2 rounded-md hover:bg-[#141e2a] transition-colors group"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Wifi className="w-4 h-4 text-cyan-400" />
-                      <span className="text-white text-sm">WiFi Settings</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-cyan-400 transition-colors" />
-                  </button>
+                  <div>
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setBluetoothPopupOpen(false);
+                        setWifiPopupOpen((open) => {
+                          const next = !open;
+                          if (next) {
+                            setWifiError(null);
+                            void wifiNetworks.refetch();
+                          }
+                          return next;
+                        });
+                      }}
+                      className="w-full flex items-center justify-between p-2 rounded-md hover:bg-[#141e2a] transition-colors group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Wifi className="w-4 h-4 text-cyan-400" />
+                        <span className="text-white text-sm">WiFi Settings</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-cyan-400 transition-colors" />
+                    </button>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {wifiStatus.isLoading
+                        ? 'Chargement…'
+                        : wifiStatus.isError
+                          ? 'Statut Wi-Fi indisponible'
+                          : `État : ${wifiStatus.data?.enabled ? 'activé' : 'désactivé'}`}
+                    </p>
+                    {wifiError && <p className="text-xs text-red-400 mt-1">{wifiError}</p>}
+                  </div>
 
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setBluetoothPopupOpen(!bluetoothPopupOpen);
-                      setWifiPopupOpen(false);
-                    }}
-                    className="w-full flex items-center justify-between p-2 rounded-md hover:bg-[#141e2a] transition-colors group"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Bluetooth className="w-4 h-4 text-cyan-400" />
-                      <span className="text-white text-sm">Bluetooth Settings</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-cyan-400 transition-colors" />
-                  </button>
+                  <div>
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setWifiPopupOpen(false);
+                        setBluetoothPopupOpen((open) => {
+                          const next = !open;
+                          if (next) {
+                            setBluetoothError(null);
+                            void bluetoothDevices.refetch();
+                          }
+                          return next;
+                        });
+                      }}
+                      className="w-full flex items-center justify-between p-2 rounded-md hover:bg-[#141e2a] transition-colors group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Bluetooth className="w-4 h-4 text-cyan-400" />
+                        <span className="text-white text-sm">Bluetooth Settings</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-cyan-400 transition-colors" />
+                    </button>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {bluetoothStatus.isLoading
+                        ? 'Chargement…'
+                        : bluetoothStatus.isError
+                          ? 'Statut Bluetooth indisponible'
+                          : `État : ${bluetoothStatus.data?.powered ? 'activé' : 'désactivé'}`}
+                    </p>
+                    {bluetoothError && <p className="text-xs text-red-400 mt-1">{bluetoothError}</p>}
+                  </div>
 
                   <button 
                     onClick={() => setPortSettingsOpen(true)}
@@ -338,16 +448,37 @@ const GeneralSettingsPopup: React.FC<GeneralSettingsPopupProps> = ({ isOpen, onC
 
       <WifiPopup
         isOpen={wifiPopupOpen}
-        onClose={() => setWifiPopupOpen(false)}
-        isEnabled={wifiEnabled}
-        onToggle={() => setWifiEnabled(!wifiEnabled)}
+        onClose={() => {
+          setWifiPopupOpen(false);
+          setWifiError(null);
+        }}
+        isEnabled={wifiStatus.data?.enabled ?? false}
+        isToggling={toggleWifiMutation.isPending}
+        onToggle={handleWifiToggle}
+        networks={wifiNetworks.data}
+        isLoadingNetworks={wifiNetworks.isLoading || wifiNetworks.isFetching}
+        onRefresh={async () => {
+          await wifiNetworks.refetch();
+        }}
+        onConnect={handleWifiConnect}
+        connectionError={wifiError}
+        isConnecting={connectWifiMutation.isPending}
       />
 
       <BluetoothPopup
         isOpen={bluetoothPopupOpen}
-        onClose={() => setBluetoothPopupOpen(false)}
-        isEnabled={bluetoothEnabled}
-        onToggle={() => setBluetoothEnabled(!bluetoothEnabled)}
+        onClose={() => {
+          setBluetoothPopupOpen(false);
+          setBluetoothError(null);
+        }}
+        isEnabled={bluetoothStatus.data?.powered ?? false}
+        isToggling={toggleBluetoothMutation.isPending}
+        onToggle={handleBluetoothToggle}
+        devices={bluetoothDevices.data}
+        isLoadingDevices={bluetoothDevices.isLoading || bluetoothDevices.isFetching}
+        onRefresh={async () => {
+          await bluetoothDevices.refetch();
+        }}
       />
 
       <VirtualKeyboardSettingsPopup
